@@ -1,0 +1,108 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Authenticated student profile and overall study metrics.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Firebase Auth UID of the student." },
+        "displayName": { "type": "string", "description": "Student display name." },
+        "studyGoal": { "type": "string", "description": "Current learning target or exam goal." },
+        "dailyTargetMinutes": { "type": "integer", "description": "Daily study goal in minutes." },
+        "totalStudyMinutes": { "type": "integer", "description": "Accumulated study minutes logged." },
+        "completedSessions": { "type": "integer", "description": "Number of completed study or quiz sessions." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "displayName", "studyGoal", "dailyTargetMinutes", "totalStudyMinutes", "completedSessions", "createdAt", "updatedAt"]
+    },
+    "StudyMaterial": {
+      "title": "StudyMaterial",
+      "description": "Custom student-added Google Drive link, video clip link, or reading note.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "title": { "type": "string", "description": "Material title." },
+        "description": { "type": "string", "description": "Short summary or notes." },
+        "materialType": { "type": "string", "enum": ["READING", "VIDEO_CLIP", "DRIVE_FOLDER", "GOOGLE_DOC", "NOTES"] },
+        "sourceUrl": { "type": "string", "description": "Google Drive, Docs, or video link." },
+        "contentMarkdown": { "type": "string", "description": "Optional reading text or transcript." },
+        "category": { "type": "string", "description": "Subject or module category." },
+        "estimatedMinutes": { "type": "integer", "description": "Estimated study duration in minutes." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "title", "description", "materialType", "sourceUrl", "contentMarkdown", "category", "estimatedMinutes", "createdAt", "updatedAt"]
+    },
+    "MaterialProgress": {
+      "title": "MaterialProgress",
+      "description": "Student completion status, time spent, and personal notes per study material.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "materialId": { "type": "string", "description": "Referenced study material identifier." },
+        "completed": { "type": "boolean", "description": "Whether the student completed this material." },
+        "personalNotes": { "type": "string", "description": "Student notes for this material." },
+        "minutesSpent": { "type": "integer", "description": "Total minutes spent studying this material." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "materialId", "completed", "personalNotes", "minutesSpent", "createdAt", "updatedAt"]
+    },
+    "StudyPlanItem": {
+      "title": "StudyPlanItem",
+      "description": "Scheduled study plan item for daily/weekly progress tracking.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "title": { "type": "string", "description": "Task or module title." },
+        "topic": { "type": "string", "description": "Topic or subject tag." },
+        "dayLabel": { "type": "string", "description": "Target day label (e.g., Today, Day 1)." },
+        "targetMinutes": { "type": "integer", "description": "Planned study duration in minutes." },
+        "completed": { "type": "boolean", "description": "Completion state." },
+        "linkedMaterialId": { "type": "string", "description": "Optional linked study material ID." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "title", "topic", "dayLabel", "targetMinutes", "completed", "linkedMaterialId", "createdAt", "updatedAt"]
+    },
+    "QuizAttempt": {
+      "title": "QuizAttempt",
+      "description": "Completed MCQ test result and accuracy log.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "topic": { "type": "string", "description": "Quiz topic or source material title." },
+        "totalQuestions": { "type": "integer", "description": "Total number of MCQs in the test." },
+        "correctCount": { "type": "integer", "description": "Number of correctly answered questions." },
+        "durationSeconds": { "type": "integer", "description": "Elapsed time in seconds." },
+        "fullScreenUsed": { "type": "boolean", "description": "Whether the test was taken in full-screen exam mode." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "topic", "totalQuestions", "correctCount", "durationSeconds", "fullScreenUsed", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Student profile and aggregate study progress."
+    },
+    "/users/{userId}/studyMaterials/{materialId}": {
+      "schema": { "$ref": "#/entities/StudyMaterial" },
+      "description": "Custom student-added study materials."
+    },
+    "/users/{userId}/materialProgress/{materialId}": {
+      "schema": { "$ref": "#/entities/MaterialProgress" },
+      "description": "Per-material completion and study notes."
+    },
+    "/users/{userId}/studyPlans/{planId}": {
+      "schema": { "$ref": "#/entities/StudyPlanItem" },
+      "description": "Personalized study plan checklist items."
+    },
+    "/users/{userId}/quizAttempts/{attemptId}": {
+      "schema": { "$ref": "#/entities/QuizAttempt" },
+      "description": "MCQ test scores and history."
+    }
+  }
+}

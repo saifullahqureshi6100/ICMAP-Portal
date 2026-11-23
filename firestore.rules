@@ -1,0 +1,188 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Global safety net: default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isValidTimestamp(ts) {
+      return ts is timestamp && ts <= request.time;
+    }
+
+    function isValidUserProfile(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 80 &&
+             data.studyGoal is string && data.studyGoal.size() <= 200 &&
+             data.dailyTargetMinutes is int && data.dailyTargetMinutes >= 5 && data.dailyTargetMinutes <= 720 &&
+             data.totalStudyMinutes is int && data.totalStudyMinutes >= 0 && data.totalStudyMinutes <= 1000000 &&
+             data.completedSessions is int && data.completedSessions >= 0 && data.completedSessions <= 100000;
+    }
+
+    function isValidStudyMaterial(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
+             data.description is string && data.description.size() <= 600 &&
+             data.materialType in ['READING', 'VIDEO_CLIP', 'DRIVE_FOLDER', 'GOOGLE_DOC', 'NOTES'] &&
+             data.sourceUrl is string && data.sourceUrl.size() <= 1000 &&
+             data.contentMarkdown is string && data.contentMarkdown.size() <= 12000 &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 60 &&
+             data.estimatedMinutes is int && data.estimatedMinutes >= 1 && data.estimatedMinutes <= 600;
+    }
+
+    function isValidMaterialProgress(data, materialId) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.materialId is string && data.materialId == materialId &&
+             data.completed is bool &&
+             data.personalNotes is string && data.personalNotes.size() <= 4000 &&
+             data.minutesSpent is int && data.minutesSpent >= 0 && data.minutesSpent <= 10000;
+    }
+
+    function isValidStudyPlanItem(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.title is string && data.title.size() >= 1 && data.title.size() <= 140 &&
+             data.topic is string && data.topic.size() <= 120 &&
+             data.dayLabel is string && data.dayLabel.size() >= 1 && data.dayLabel.size() <= 40 &&
+             data.targetMinutes is int && data.targetMinutes >= 5 && data.targetMinutes <= 480 &&
+             data.completed is bool &&
+             data.linkedMaterialId is string && data.linkedMaterialId.size() <= 128;
+    }
+
+    function isValidQuizAttempt(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.topic is string && data.topic.size() >= 1 && data.topic.size() <= 140 &&
+             data.totalQuestions is int && data.totalQuestions >= 1 && data.totalQuestions <= 100 &&
+             data.correctCount is int && data.correctCount >= 0 && data.correctCount <= data.totalQuestions &&
+             data.durationSeconds is int && data.durationSeconds >= 0 && data.durationSeconds <= 36000 &&
+             data.fullScreenUsed is bool;
+    }
+
+    match /users/{userId} {
+      allow get, list: if isOwner(userId) && isValidId(userId);
+
+      allow create: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       incoming().keys().hasAll(['userId', 'displayName', 'studyGoal', 'dailyTargetMinutes', 'totalStudyMinutes', 'completedSessions', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['userId', 'displayName', 'studyGoal', 'dailyTargetMinutes', 'totalStudyMinutes', 'completedSessions', 'createdAt', 'updatedAt']) &&
+                       isValidTimestamp(incoming().createdAt) &&
+                       isValidTimestamp(incoming().updatedAt) &&
+                       isValidUserProfile(incoming());
+
+      allow update: if isOwner(userId) &&
+                       isValidId(userId) &&
+                       isValidUserProfile(incoming()) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       isValidTimestamp(incoming().updatedAt) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'studyGoal', 'dailyTargetMinutes', 'totalStudyMinutes', 'completedSessions', 'updatedAt']);
+
+      allow delete: if isOwner(userId) && isValidId(userId);
+
+      match /studyMaterials/{materialId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(materialId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(materialId) &&
+                         incoming().keys().hasAll(['userId', 'title', 'description', 'materialType', 'sourceUrl', 'contentMarkdown', 'category', 'estimatedMinutes', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'description', 'materialType', 'sourceUrl', 'contentMarkdown', 'category', 'estimatedMinutes', 'createdAt', 'updatedAt']) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isValidStudyMaterial(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(materialId) &&
+                         isValidStudyMaterial(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'description', 'materialType', 'sourceUrl', 'contentMarkdown', 'category', 'estimatedMinutes', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(materialId);
+      }
+
+      match /materialProgress/{materialId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(materialId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(materialId) &&
+                         incoming().keys().hasAll(['userId', 'materialId', 'completed', 'personalNotes', 'minutesSpent', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'materialId', 'completed', 'personalNotes', 'minutesSpent', 'createdAt', 'updatedAt']) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isValidMaterialProgress(incoming(), materialId);
+
+        allow update: if isOwner(userId) &&
+                         isValidId(materialId) &&
+                         isValidMaterialProgress(incoming(), materialId) &&
+                         incoming().userId == existing().userId &&
+                         incoming().materialId == existing().materialId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['completed', 'personalNotes', 'minutesSpent', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(materialId);
+      }
+
+      match /studyPlans/{planId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(planId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(planId) &&
+                         incoming().keys().hasAll(['userId', 'title', 'topic', 'dayLabel', 'targetMinutes', 'completed', 'linkedMaterialId', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'title', 'topic', 'dayLabel', 'targetMinutes', 'completed', 'linkedMaterialId', 'createdAt', 'updatedAt']) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isValidStudyPlanItem(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(planId) &&
+                         isValidStudyPlanItem(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['title', 'topic', 'dayLabel', 'targetMinutes', 'completed', 'linkedMaterialId', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(planId);
+      }
+
+      match /quizAttempts/{attemptId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(attemptId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(attemptId) &&
+                         incoming().keys().hasAll(['userId', 'topic', 'totalQuestions', 'correctCount', 'durationSeconds', 'fullScreenUsed', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'topic', 'totalQuestions', 'correctCount', 'durationSeconds', 'fullScreenUsed', 'createdAt', 'updatedAt']) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isValidQuizAttempt(incoming());
+
+        allow update: if false;
+        allow delete: if isOwner(userId) && isValidId(attemptId);
+      }
+    }
+  }
+}

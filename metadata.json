@@ -1,0 +1,6 @@
+{
+  "name": "Study Portal",
+  "description": "AI-powered Study Portal with full-screen reading materials, video clips, MCQ testing, AI tutor, and plan & progress tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
