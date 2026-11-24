@@ -38,6 +38,8 @@ import androidx.compose.material.icons.rounded.EmojiEvents
 import androidx.compose.material.icons.rounded.ExpandLess
 import androidx.compose.material.icons.rounded.ExpandMore
 import androidx.compose.material.icons.rounded.Flag
+import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Quiz
 import androidx.compose.material.icons.rounded.Route
@@ -47,6 +49,7 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -115,7 +118,9 @@ fun StudyRoadmapCard(
     onToggleMaterialComplete: (String, Boolean, Long) -> Unit,
     onLaunchMcqBank: (McqBank) -> Unit,
     onTogglePlanItem: (String, Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    isFullScreen: Boolean = false,
+    onToggleFullScreen: (() -> Unit)? = null
 ) {
     var viewMode by remember { mutableStateOf(RoadmapViewMode.MODULES) }
     var expandedNodeId by remember { mutableStateOf<String?>(null) }
@@ -190,17 +195,36 @@ fun StudyRoadmapCard(
                     }
                 }
 
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Text(
-                        text = "${(overallRoadmapProgress * 100).toInt()}%",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                    )
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer
+                    ) {
+                        Text(
+                            text = "${(overallRoadmapProgress * 100).toInt()}%",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                        )
+                    }
+
+                    if (onToggleFullScreen != null) {
+                        IconButton(
+                            onClick = onToggleFullScreen,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("roadmap_fullscreen_toggle")
+                        ) {
+                            Icon(
+                                imageVector = if (isFullScreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
+                                contentDescription = if (isFullScreen) "Exit Full-Screen Roadmap" else "Full-Screen Roadmap"
+                            )
+                        }
+                    }
                 }
             }
 

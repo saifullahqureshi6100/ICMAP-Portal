@@ -4,6 +4,9 @@ import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AiTutorRepository
+import com.example.data.Flashcard
+import com.example.data.FreeExternalApiService
+import com.example.data.FreeReferenceResult
 import com.example.data.FullScreenMode
 import com.example.data.MaterialProgress
 import com.example.data.MaterialType
@@ -13,11 +16,16 @@ import com.example.data.OmMcqBanks
 import com.example.data.PomodoroPhase
 import com.example.data.PomodoroState
 import com.example.data.PortalTab
+import com.example.data.PreloadedFlashcards
 import com.example.data.PreloadedMaterials
 import com.example.data.QuizAttempt
+import com.example.data.QuizSessionState
+import com.example.data.ReaderAiAction
+import com.example.data.ReaderAiSessionState
 import com.example.data.StudyMaterial
 import com.example.data.StudyPlanItem
 import com.example.data.StudyRepository
+import com.example.data.TutorEngineMode
 import com.example.data.TutorMessage
 import com.example.data.UserProfile
 import com.google.firebase.ai.type.content
@@ -53,7 +61,8 @@ class StudyPortalViewModel(
     private val studyRepo: StudyRepository,
     private val aiRepo: AiTutorRepository,
     private val currentUserId: String,
-    initialDisplayName: String
+    initialDisplayName: String,
+    private val freeApiService: FreeExternalApiService = FreeExternalApiService()
 ) : ViewModel() {
 
     private fun <T> Flow<T>.toSafeUiState(fallbackError: String): StateFlow<StreamUiState<T>> =
@@ -94,6 +103,32 @@ class StudyPortalViewModel(
         studyRepo.observeQuizAttempts(currentUserId)
             .toSafeUiState("Failed to load quiz history")
 
+    private val savedFlashcardsState: StateFlow<StreamUiState<List<Flashcard>>> =
+        studyRepo.observeFlashcards(currentUserId)
+            .toSafeUiState("Failed to load flashcards")
+
+    private val _starterMasteryMap = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    private val _starterReviewMap = MutableStateFlow<Map<String, Long>>(emptyMap())
+
+    val flashcardsState: StateFlow<List<Flashcard>> = combine(
+        savedFlashcardsState,
+        _starterMasteryMap,
+        _starterReviewMap
+    ) { savedRes, starterMastery, starterReviews ->
+        val saved = (savedRes as? StreamUiState.Success)?.data ?: emptyList()
+        val starters = PreloadedFlashcards.cards.map { card ->
+            card.copy(
+                mastered = starterMastery[card.id] ?: card.mastered,
+                reviewCount = starterReviews[card.id] ?: card.reviewCount
+            )
+        }
+        saved + starters
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+        initialValue = PreloadedFlashcards.cards
+    )
+
     private val _activeTab = MutableStateFlow(PortalTab.DASHBOARD)
     val activeTab: StateFlow<PortalTab> = _activeTab.asStateFlow()
 
@@ -121,19 +156,47 @@ class StudyPortalViewModel(
     private val _tutorState = MutableStateFlow<AiTaskState>(AiTaskState.Idle)
     val tutorState: StateFlow<AiTaskState> = _tutorState.asStateFlow()
 
-    private var tutorJob: Job? = null
+    private val _tutorEngineMode = MutableStateFlow(TutorEngineMode.GEMINI_BUILTIN)
+    val tutorEngineMode: StateFlow<TutorEngineMode> = _tutorEngineMode.asStateFlow()
 
-    // MCQ Generator state
+    private val _freeRefState = MutableStateFlow<AiTaskState>(AiTaskState.Idle)
+    val freeRefState: StateFlow<AiTaskState> = _freeRefState.asStateFlow()
+
+    private val _freeRefResult = MutableStateFlow<FreeReferenceResult?>(null)
+    val freeRefResult: StateFlow<FreeReferenceResult?> = _freeRefResult.asStateFlow()
+
+    private var tutorJob: Job? = null
+    private var freeRefJob: Job? = null
+
+    private val _readerAiState = MutableStateFlow(ReaderAiSessionState())
+    val readerAiState: StateFlow<ReaderAiSessionState> = _readerAiState.asStateFlow()
+    private var readerAiJob: Job? = null
+    private var lastReaderMaterial: StudyMaterial? = null
+    private var lastReaderSnippet: String = ""
+    private var lastReaderPageLabel: String? = null
+    private var lastReaderBitmap: Bitmap? = null
+
+    private var lastViewedMaterial: StudyMaterial = PreloadedMaterials.items.first()
+
+    // MCQ Generator & Live Quiz Session state
     private val _mcqGenState = MutableStateFlow<AiTaskState>(AiTaskState.Idle)
     val mcqGenState: StateFlow<AiTaskState> = _mcqGenState.asStateFlow()
 
-    private val _generatedMcqs = MutableStateFlow<Pair<String, List<McqQuestion>>?>(
-        OmMcqBanks.banks.first().let { it.title to it.questions }
+    private val _quizSession = MutableStateFlow(
+        OmMcqBanks.banks.first().let { bank ->
+            QuizSessionState(topic = bank.title, questions = bank.questions)
+        }
     )
-    val generatedMcqs: StateFlow<Pair<String, List<McqQuestion>>?> = _generatedMcqs.asStateFlow()
+    val quizSession: StateFlow<QuizSessionState> = _quizSession.asStateFlow()
 
     private val _planGenState = MutableStateFlow<AiTaskState>(AiTaskState.Idle)
     val planGenState: StateFlow<AiTaskState> = _planGenState.asStateFlow()
+
+    private val _flashcardGenState = MutableStateFlow<AiTaskState>(AiTaskState.Idle)
+    val flashcardGenState: StateFlow<AiTaskState> = _flashcardGenState.asStateFlow()
+
+    private val _selectedDeckFilter = MutableStateFlow<String?>(null)
+    val selectedDeckFilter: StateFlow<String?> = _selectedDeckFilter.asStateFlow()
 
     // Pomodoro Focus Timer state
     private val _pomodoroState = MutableStateFlow(PomodoroState())
@@ -189,7 +252,36 @@ class StudyPortalViewModel(
     }
 
     fun exitFullScreen() {
+        dismissReaderAiSheet()
         _fullScreenMode.value = null
+    }
+
+    fun toggleFullScreenForActiveTab() {
+        if (_fullScreenMode.value != null) {
+            exitFullScreen()
+            return
+        }
+        when (_activeTab.value) {
+            PortalTab.DASHBOARD -> {
+                _fullScreenMode.value = FullScreenMode.RoadmapFocus
+            }
+            PortalTab.MATERIALS -> {
+                val materials = (materialsState.value as? StreamUiState.Success)?.data ?: PreloadedMaterials.items
+                val target = materials.firstOrNull { it.id == lastViewedMaterial.id } ?: materials.firstOrNull()
+                if (target != null) {
+                    openMaterialInFullScreen(target, target.resolvedType() == MaterialType.VIDEO_CLIP)
+                }
+            }
+            PortalTab.MCQS -> {
+                startCurrentMcqFullScreen()
+            }
+            PortalTab.FLASHCARDS -> {
+                _fullScreenMode.value = FullScreenMode.FlashcardDeck(_selectedDeckFilter.value)
+            }
+            PortalTab.TUTOR -> {
+                _fullScreenMode.value = FullScreenMode.TutorStudio()
+            }
+        }
     }
 
     fun clearFeedback() {
@@ -197,6 +289,10 @@ class StudyPortalViewModel(
     }
 
     fun openMaterialInFullScreen(material: StudyMaterial, asVideo: Boolean = false) {
+        if (lastReaderMaterial?.id != material.id) {
+            dismissReaderAiSheet()
+        }
+        lastViewedMaterial = material
         _fullScreenMode.value = FullScreenMode.ReadingViewer(material = material, openAsVideo = asVideo)
     }
 
@@ -359,6 +455,74 @@ class StudyPortalViewModel(
         }
     }
 
+    fun selectTutorEngine(mode: TutorEngineMode) {
+        _tutorEngineMode.value = mode
+        _tutorState.value = AiTaskState.Idle
+        _feedbackMessage.value = "AI Tutor switched to ${mode.label} (${mode.subtitle})"
+    }
+
+    fun lookupWikipediaConcept(query: String) {
+        val cleaned = query.trim()
+        if (cleaned.isEmpty()) {
+            _feedbackMessage.value = "Enter a topic (e.g. Balanced Scorecard, Kaizen, MRP) to search."
+            return
+        }
+        freeRefJob?.cancel()
+        _freeRefState.value = AiTaskState.Loading
+        freeRefJob = viewModelScope.launch {
+            try {
+                val res = freeApiService.fetchWikipediaSummary(cleaned)
+                _freeRefResult.value = res
+                _freeRefState.value = AiTaskState.Idle
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _freeRefState.value = AiTaskState.Error(e.localizedMessage ?: "Wikipedia lookup failed.")
+            }
+        }
+    }
+
+    fun lookupDictionaryTerm(word: String) {
+        val cleaned = word.trim()
+        if (cleaned.isEmpty()) {
+            _feedbackMessage.value = "Enter a word (e.g. synergy, ergonomics, strategy) to define."
+            return
+        }
+        freeRefJob?.cancel()
+        _freeRefState.value = AiTaskState.Loading
+        freeRefJob = viewModelScope.launch {
+            try {
+                val res = freeApiService.fetchDictionaryDefinition(cleaned)
+                _freeRefResult.value = res
+                _freeRefState.value = AiTaskState.Idle
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _freeRefState.value = AiTaskState.Error(e.localizedMessage ?: "Dictionary lookup failed.")
+            }
+        }
+    }
+
+    fun dismissFreeReference() {
+        freeRefJob?.cancel()
+        _freeRefState.value = AiTaskState.Idle
+        _freeRefResult.value = null
+    }
+
+    fun askTutorAboutReference(ref: FreeReferenceResult) {
+        val prompt = buildString {
+            appendLine("Break down this concept from ${ref.sourceName} for exam revision:")
+            appendLine("Topic: ${ref.title}")
+            if (ref.subtitle.isNotBlank()) appendLine("Overview: ${ref.subtitle}")
+            appendLine()
+            appendLine(ref.summary.take(1200))
+            appendLine()
+            append("Explain key takeaways, a practical example, and give me 1 quick practice question.")
+        }
+        _freeRefResult.value = null
+        sendTutorMessage(prompt, null)
+    }
+
     fun sendTutorMessage(userPrompt: String, attachedImage: Bitmap?) {
         val trimmed = userPrompt.trim()
         if (trimmed.isEmpty() && attachedImage == null) return
@@ -372,14 +536,20 @@ class StudyPortalViewModel(
             hasAttachment = attachedImage != null
         )
 
-        val priorHistory = _tutorMessages.value
+        val recentMessages = _tutorMessages.value
             .drop(1) // Skip static greeting
             .takeLast(10)
-            .map { msg ->
-                content(if (msg.isUser) "user" else "model") {
-                    text(msg.text)
-                }
+
+        val priorHistory = recentMessages.map { msg ->
+            content(if (msg.isUser) "user" else "model") {
+                text(msg.text)
             }
+        }
+
+        val engine = _tutorEngineMode.value
+        if (engine == TutorEngineMode.POLLINATIONS_FREE && attachedImage != null) {
+            _feedbackMessage.value = "Using Built-in Gemini Vision for attached image."
+        }
 
         _tutorMessages.value = _tutorMessages.value + userMsg
         _tutorState.value = AiTaskState.Loading
@@ -388,15 +558,25 @@ class StudyPortalViewModel(
         tutorJob = viewModelScope.launch {
             var latestText = ""
             try {
-                aiRepo.streamTutorResponse(effectivePrompt, priorHistory, attachedImage).collect { accumulated ->
-                    latestText = accumulated
-                    _tutorStreamingText.value = accumulated
+                if (engine == TutorEngineMode.POLLINATIONS_FREE && attachedImage == null) {
+                    _tutorStreamingText.value = "Querying Pollinations Open AI ($0 No-Key endpoint)..."
+                    val reply = freeApiService.askPollinationsChat(effectivePrompt, recentMessages)
+                    _tutorMessages.value = _tutorMessages.value + TutorMessage(
+                        id = "m_${UUID.randomUUID().toString().take(8)}",
+                        isUser = false,
+                        text = reply
+                    )
+                } else {
+                    aiRepo.streamTutorResponse(effectivePrompt, priorHistory, attachedImage).collect { accumulated ->
+                        latestText = accumulated
+                        _tutorStreamingText.value = accumulated
+                    }
+                    _tutorMessages.value = _tutorMessages.value + TutorMessage(
+                        id = "m_${UUID.randomUUID().toString().take(8)}",
+                        isUser = false,
+                        text = latestText
+                    )
                 }
-                _tutorMessages.value = _tutorMessages.value + TutorMessage(
-                    id = "m_${UUID.randomUUID().toString().take(8)}",
-                    isUser = false,
-                    text = latestText
-                )
                 _tutorStreamingText.value = null
                 _tutorState.value = AiTaskState.Idle
             } catch (e: CancellationException) {
@@ -407,6 +587,165 @@ class StudyPortalViewModel(
                 _tutorState.value = AiTaskState.Error(e.localizedMessage ?: "AI Tutor request failed.")
             }
         }
+    }
+
+    fun runReaderAiAction(
+        material: StudyMaterial,
+        action: ReaderAiAction,
+        selectedText: String,
+        pageLabel: String? = null,
+        pageBitmap: Bitmap? = null
+    ) {
+        val cleaned = selectedText.trim()
+        if (cleaned.isEmpty() && pageBitmap == null) {
+            _feedbackMessage.value = "Select text or capture a page first."
+            return
+        }
+
+        lastReaderMaterial = material
+        lastReaderSnippet = cleaned
+        lastReaderPageLabel = pageLabel
+        lastReaderBitmap = pageBitmap
+
+        readerAiJob?.cancel()
+        _readerAiState.value = ReaderAiSessionState(
+            isVisible = true,
+            action = action,
+            materialId = material.id,
+            materialTitle = material.title,
+            materialCategory = material.category,
+            selectedSnippet = cleaned,
+            pageLabel = pageLabel,
+            hasPageImage = pageBitmap != null,
+            responseText = "",
+            isLoading = true,
+            errorMessage = null,
+            savedToNotes = false
+        )
+
+        readerAiJob = viewModelScope.launch {
+            try {
+                aiRepo.streamSelectionTutorAction(
+                    action = action,
+                    materialTitle = material.title,
+                    materialCategory = material.category,
+                    selectedText = cleaned,
+                    pageLabel = pageLabel,
+                    pageBitmap = pageBitmap
+                ).collect { accumulated ->
+                    _readerAiState.value = _readerAiState.value.copy(
+                        responseText = accumulated,
+                        isLoading = true,
+                        errorMessage = null
+                    )
+                }
+                _readerAiState.value = _readerAiState.value.copy(
+                    isLoading = false,
+                    errorMessage = null
+                )
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _readerAiState.value = _readerAiState.value.copy(
+                    isLoading = false,
+                    errorMessage = e.localizedMessage ?: "AI Tutor failed to analyze selection."
+                )
+            }
+        }
+    }
+
+    fun switchReaderAiAction(action: ReaderAiAction) {
+        val mat = lastReaderMaterial ?: return
+        runReaderAiAction(
+            material = mat,
+            action = action,
+            selectedText = lastReaderSnippet,
+            pageLabel = lastReaderPageLabel,
+            pageBitmap = lastReaderBitmap
+        )
+    }
+
+    fun retryReaderAiAction() {
+        switchReaderAiAction(_readerAiState.value.action)
+    }
+
+    fun dismissReaderAiSheet() {
+        readerAiJob?.cancel()
+        readerAiJob = null
+        _readerAiState.value = ReaderAiSessionState()
+    }
+
+    fun saveReaderAiToNotes() {
+        val state = _readerAiState.value
+        if (state.responseText.isBlank() || state.materialId.isBlank()) return
+        val existingProgress = (progressMapState.value as? StreamUiState.Success)?.data?.get(state.materialId)
+        val existingNotes = existingProgress?.personalNotes.orEmpty().trim()
+        val header = buildString {
+            append("--- AI ${state.action.shortLabel}")
+            if (!state.pageLabel.isNullOrBlank()) append(" (${state.pageLabel})")
+            append(" ---")
+        }
+        val snippetQuote = if (state.selectedSnippet.isNotBlank()) {
+            "\nSource: \"${state.selectedSnippet.take(140)}${if (state.selectedSnippet.length > 140) "..." else ""}\""
+        } else ""
+        val combined = buildString {
+            if (existingNotes.isNotEmpty()) {
+                append(existingNotes)
+                append("\n\n")
+            }
+            append(header)
+            append(snippetQuote)
+            append("\n")
+            append(state.responseText.trim())
+        }
+
+        viewModelScope.launch {
+            val res = studyRepo.saveMaterialNotes(currentUserId, state.materialId, combined, existingProgress)
+            if (res.isSuccess) {
+                _readerAiState.value = _readerAiState.value.copy(savedToNotes = true)
+                _feedbackMessage.value = "AI notes appended to Personal Study Notes!"
+            } else {
+                _feedbackMessage.value = res.exceptionOrNull()?.localizedMessage ?: "Could not save AI notes."
+            }
+        }
+    }
+
+    fun continueReaderAiInTutor() {
+        val state = _readerAiState.value
+        if (state.responseText.isBlank() && state.selectedSnippet.isBlank()) return
+        val contextDesc = buildString {
+            append("[${state.action.label} • ${state.materialTitle}")
+            if (!state.pageLabel.isNullOrBlank()) append(" • ${state.pageLabel}")
+            append("]\n")
+            if (state.selectedSnippet.isNotBlank()) {
+                append("\"${state.selectedSnippet.take(500)}\"")
+            } else {
+                append("Analyze ${state.pageLabel ?: "this reading page"}")
+            }
+        }
+        val extraMsgs = buildList {
+            add(
+                TutorMessage(
+                    id = "u_${UUID.randomUUID().toString().take(8)}",
+                    isUser = true,
+                    text = contextDesc,
+                    hasAttachment = state.hasPageImage
+                )
+            )
+            if (state.responseText.isNotBlank()) {
+                add(
+                    TutorMessage(
+                        id = "m_${UUID.randomUUID().toString().take(8)}",
+                        isUser = false,
+                        text = state.responseText
+                    )
+                )
+            }
+        }
+        _tutorMessages.value = _tutorMessages.value + extraMsgs
+        dismissReaderAiSheet()
+        _activeTab.value = PortalTab.TUTOR
+        _fullScreenMode.value = FullScreenMode.TutorStudio()
     }
 
     fun generateAndStartMcqQuiz(
@@ -420,7 +759,7 @@ class StudyPortalViewModel(
             _mcqGenState.value = AiTaskState.Loading
             try {
                 val questions = aiRepo.generateMcqs(topic, notesContext, count)
-                _generatedMcqs.value = topic to questions
+                _quizSession.value = QuizSessionState(topic = topic, questions = questions)
                 _mcqGenState.value = AiTaskState.Idle
                 if (launchFullScreen) {
                     _fullScreenMode.value = FullScreenMode.McqExam(topic = topic, questions = questions)
@@ -433,8 +772,133 @@ class StudyPortalViewModel(
         }
     }
 
+    fun selectFlashcardDeck(deckTitle: String?) {
+        _selectedDeckFilter.value = deckTitle
+    }
+
+    fun openFlashcardsFullScreen(deckFilter: String? = _selectedDeckFilter.value) {
+        _selectedDeckFilter.value = deckFilter
+        _fullScreenMode.value = FullScreenMode.FlashcardDeck(deckFilter)
+    }
+
+    fun generateFlashcardsFromMaterial(
+        material: StudyMaterial,
+        customExcerpt: String = "",
+        cardCount: Int = 6,
+        launchFullScreen: Boolean = false
+    ) {
+        if (_flashcardGenState.value is AiTaskState.Loading) return
+        val contextNotes = buildString {
+            if (customExcerpt.isNotBlank()) {
+                appendLine(customExcerpt.trim())
+                appendLine()
+            }
+            if (material.description.isNotBlank()) {
+                appendLine("Overview: ${material.description}")
+            }
+            if (material.contentMarkdown.isNotBlank()) {
+                appendLine(material.contentMarkdown)
+            }
+        }.ifBlank {
+            "Generate high-yield study flashcards on ${material.title} (${material.category})."
+        }
+
+        viewModelScope.launch {
+            _flashcardGenState.value = AiTaskState.Loading
+            try {
+                val generated = aiRepo.generateFlashcards(
+                    deckTitle = material.title,
+                    sourceContent = contextNotes,
+                    cardCount = cardCount
+                )
+                val saveRes = studyRepo.saveGeneratedFlashcards(
+                    userId = currentUserId,
+                    materialId = material.id,
+                    deckTitle = material.title,
+                    cards = generated
+                )
+                if (saveRes.isSuccess) {
+                    val savedCount = saveRes.getOrDefault(generated.size)
+                    _flashcardGenState.value = AiTaskState.Idle
+                    _selectedDeckFilter.value = material.title.take(140)
+                    _feedbackMessage.value = "Generated $savedCount flashcards from ${material.title}!"
+                    if (launchFullScreen) {
+                        _fullScreenMode.value = FullScreenMode.FlashcardDeck(_selectedDeckFilter.value)
+                    }
+                } else {
+                    _flashcardGenState.value = AiTaskState.Error(
+                        saveRes.exceptionOrNull()?.localizedMessage ?: "Failed to save flashcards."
+                    )
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _flashcardGenState.value = AiTaskState.Error(
+                    e.localizedMessage ?: "Failed to generate flashcards."
+                )
+            }
+        }
+    }
+
+    fun addCustomFlashcard(
+        deckTitle: String,
+        materialId: String,
+        front: String,
+        back: String,
+        hint: String
+    ) {
+        viewModelScope.launch {
+            val res = studyRepo.addCustomFlashcard(
+                userId = currentUserId,
+                materialId = materialId,
+                deckTitle = deckTitle,
+                front = front,
+                back = back,
+                hint = hint
+            )
+            _feedbackMessage.value = if (res.isSuccess) {
+                _selectedDeckFilter.value = deckTitle.trim().ifBlank { "Custom Flashcards" }.take(140)
+                "Flashcard saved to deck!"
+            } else {
+                res.exceptionOrNull()?.localizedMessage ?: "Could not save flashcard."
+            }
+        }
+    }
+
+    fun recordFlashcardReview(card: Flashcard, mastered: Boolean) {
+        if (card.userId.isBlank()) {
+            _starterMasteryMap.value = _starterMasteryMap.value + (card.id to mastered)
+            _starterReviewMap.value = _starterReviewMap.value + (card.id to (card.reviewCount + 1L))
+            return
+        }
+        viewModelScope.launch {
+            val res = studyRepo.updateFlashcardMastery(
+                userId = currentUserId,
+                cardId = card.id,
+                mastered = mastered,
+                currentReviewCount = card.reviewCount
+            )
+            if (res.isFailure) {
+                _feedbackMessage.value = res.exceptionOrNull()?.localizedMessage ?: "Could not update card mastery."
+            }
+        }
+    }
+
+    fun deleteFlashcard(card: Flashcard) {
+        if (card.userId.isBlank()) {
+            _feedbackMessage.value = "Starter OM cards remain available offline."
+            return
+        }
+        viewModelScope.launch {
+            val res = studyRepo.deleteFlashcard(currentUserId, card.id)
+            if (res.isFailure) {
+                _feedbackMessage.value = res.exceptionOrNull()?.localizedMessage ?: "Failed to delete flashcard."
+            }
+        }
+    }
+
     fun selectMcqBank(bank: McqBank, launchFullScreen: Boolean) {
-        _generatedMcqs.value = bank.title to bank.questions
+        _quizSession.value = QuizSessionState(topic = bank.title, questions = bank.questions)
         if (launchFullScreen) {
             _fullScreenMode.value = FullScreenMode.McqExam(topic = bank.title, questions = bank.questions)
         } else {
@@ -443,8 +907,50 @@ class StudyPortalViewModel(
     }
 
     fun startCurrentMcqFullScreen() {
-        val current = _generatedMcqs.value ?: return
-        _fullScreenMode.value = FullScreenMode.McqExam(topic = current.first, questions = current.second)
+        val current = _quizSession.value
+        if (current.questions.isEmpty()) return
+        _fullScreenMode.value = FullScreenMode.McqExam(topic = current.topic, questions = current.questions)
+    }
+
+    fun selectQuizOption(questionIndex: Int, optionIndex: Int) {
+        val current = _quizSession.value
+        if (current.isSubmitted) return
+        _quizSession.value = current.copy(
+            selectedAnswers = current.selectedAnswers + (questionIndex to optionIndex)
+        )
+    }
+
+    fun setQuizQuestionIndex(index: Int) {
+        val current = _quizSession.value
+        if (current.questions.isEmpty()) return
+        _quizSession.value = current.copy(
+            currentIndex = index.coerceIn(0, current.questions.lastIndex)
+        )
+    }
+
+    fun tickQuizElapsed() {
+        val current = _quizSession.value
+        if (!current.isSubmitted && current.questions.isNotEmpty()) {
+            _quizSession.value = current.copy(elapsedSeconds = current.elapsedSeconds + 1)
+        }
+    }
+
+    fun resetCurrentQuiz() {
+        val current = _quizSession.value
+        _quizSession.value = QuizSessionState(topic = current.topic, questions = current.questions)
+    }
+
+    fun submitCurrentQuiz(fullScreenUsed: Boolean) {
+        val current = _quizSession.value
+        if (current.isSubmitted || current.questions.isEmpty()) return
+        _quizSession.value = current.copy(isSubmitted = true)
+        submitQuizAttempt(
+            topic = current.topic,
+            totalQuestions = current.questions.size,
+            correctCount = current.correctCount,
+            durationSeconds = current.elapsedSeconds.toLong(),
+            fullScreenUsed = fullScreenUsed
+        )
     }
 
     fun submitQuizAttempt(

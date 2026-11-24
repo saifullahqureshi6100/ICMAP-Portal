@@ -81,6 +81,24 @@
         "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
       },
       "required": ["userId", "topic", "totalQuestions", "correctCount", "durationSeconds", "fullScreenUsed", "createdAt", "updatedAt"]
+    },
+    "Flashcard": {
+      "title": "Flashcard",
+      "description": "Active-recall digital flashcard generated from reading materials or authored by the student.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "Owner Firebase Auth UID." },
+        "materialId": { "type": "string", "description": "Source study material identifier, if derived from a material." },
+        "deckTitle": { "type": "string", "description": "Deck or topic title grouping related flashcards." },
+        "front": { "type": "string", "description": "Front question, prompt, or term." },
+        "back": { "type": "string", "description": "Back answer or concise explanation." },
+        "hint": { "type": "string", "description": "Optional memory cue shown before flipping." },
+        "mastered": { "type": "boolean", "description": "Whether the student marked this card mastered." },
+        "reviewCount": { "type": "integer", "description": "Number of times the student tested this card." },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp on creation." },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp on update." }
+      },
+      "required": ["userId", "materialId", "deckTitle", "front", "back", "hint", "mastered", "reviewCount", "createdAt", "updatedAt"]
     }
   },
   "firestore": {
@@ -103,6 +121,10 @@
     "/users/{userId}/quizAttempts/{attemptId}": {
       "schema": { "$ref": "#/entities/QuizAttempt" },
       "description": "MCQ test scores and history."
+    },
+    "/users/{userId}/flashcards/{flashcardId}": {
+      "schema": { "$ref": "#/entities/Flashcard" },
+      "description": "Student digital flashcards generated from reading materials."
     }
   }
 }

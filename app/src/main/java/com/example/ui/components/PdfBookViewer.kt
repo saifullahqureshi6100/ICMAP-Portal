@@ -31,9 +31,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.FormatListBulleted
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.rounded.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.rounded.List
+import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.ZoomIn
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -69,6 +71,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.PdfChapterJump
+import com.example.data.ReaderAiAction
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -77,6 +80,7 @@ import java.io.File
 fun PdfBookViewer(
     assetPath: String,
     chapters: List<PdfChapterJump>,
+    onAiAnalyzePage: ((ReaderAiAction, Int, Bitmap) -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -257,7 +261,7 @@ fun PdfBookViewer(
             }
         }
 
-        // Bottom PDF Pagination & Chapter Controls Bar
+        // Bottom PDF Pagination, Chapter & AI Page Tutor Controls Bar
         Surface(
             color = MaterialTheme.colorScheme.surface,
             tonalElevation = 6.dp,
@@ -265,6 +269,65 @@ fun PdfBookViewer(
                 .fillMaxWidth()
                 .navigationBarsPadding()
         ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                val activeBitmap = renderedBitmap
+                if (onAiAnalyzePage != null && activeBitmap != null && pageCount > 0) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                onAiAnalyzePage(
+                                    ReaderAiAction.SUMMARIZE_BULLETS,
+                                    currentPageIndex + 1,
+                                    activeBitmap
+                                )
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 42.dp)
+                                .testTag("pdf_ai_bullets_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.FormatListBulleted,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Bullet Notes (p.${currentPageIndex + 1})", style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                        }
+
+                        OutlinedButton(
+                            onClick = {
+                                onAiAnalyzePage(
+                                    ReaderAiAction.EXPLAIN_CONCEPT,
+                                    currentPageIndex + 1,
+                                    activeBitmap
+                                )
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 42.dp)
+                                .testTag("pdf_ai_explain_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Psychology,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Explain Page", style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                        }
+                    }
+                }
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -349,6 +412,7 @@ fun PdfBookViewer(
                         contentDescription = "Next page"
                     )
                 }
+            }
             }
         }
     }

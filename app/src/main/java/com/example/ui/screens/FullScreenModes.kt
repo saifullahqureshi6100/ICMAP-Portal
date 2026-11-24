@@ -2,7 +2,10 @@ package com.example.ui.screens
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.ClipboardManager
+import android.content.Context
 import android.content.Intent
+import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import android.net.Uri
 import android.view.View
@@ -44,14 +47,17 @@ import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.FormatSize
+import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlayCircle
+import androidx.compose.material.icons.rounded.Psychology
 import androidx.compose.material.icons.rounded.Refresh
+import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.SkipNext
+import androidx.compose.material.icons.rounded.Style
 import androidx.compose.material.icons.rounded.Tune
-import androidx.compose.material.icons.rounded.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -65,6 +71,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -91,18 +98,30 @@ import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
 import com.example.data.DriveUrlParser
+import com.example.data.FreeReferenceResult
 import com.example.data.MaterialProgress
-import com.example.data.McqQuestion
+import com.example.data.McqBank
 import com.example.data.PomodoroPhase
 import com.example.data.PomodoroState
 import com.example.data.PreloadedMaterials
+import com.example.data.QuizAttempt
+import com.example.data.QuizSessionState
+import com.example.data.ReaderAiAction
+import com.example.data.ReaderAiSessionState
 import com.example.data.StudyMaterial
+import com.example.data.StudyPlanItem
+import com.example.data.TutorEngineMode
 import com.example.data.TutorMessage
+import com.example.ui.components.CustomPassageAiDialog
+import com.example.ui.components.McqQuizArenaContent
 import com.example.ui.components.PdfBookViewer
 import com.example.ui.components.PomodoroConfigDialog
 import com.example.ui.components.PomodoroCountdownRing
+import com.example.ui.components.ReaderAiAssistantSheet
+import com.example.ui.components.SelectableAiReaderArea
+import com.example.ui.components.StudyRoadmapCard
+import com.example.ui.components.buildStyledStudyText
 import com.example.viewmodel.AiTaskState
-import kotlinx.coroutines.delay
 
 @Composable
 fun ImmersiveSystemBarsEffect() {
@@ -126,13 +145,28 @@ fun FullScreenReadingViewer(
     material: StudyMaterial,
     openAsVideo: Boolean,
     progress: MaterialProgress?,
+    readerAiState: ReaderAiSessionState,
+    onRunReaderAiAction: (ReaderAiAction, String, String?, Bitmap?) -> Unit,
+    onSwitchReaderAiAction: (ReaderAiAction) -> Unit,
+    onRetryReaderAi: () -> Unit,
+    onSaveReaderAiToNotes: () -> Unit,
+    onContinueReaderAiInTutor: () -> Unit,
+    onDismissReaderAi: () -> Unit,
     onToggleComplete: (Boolean, Long) -> Unit,
     onSaveNotes: (String) -> Unit,
     onAskTutor: (StudyMaterial) -> Unit,
+    onGenerateFlashcards: (StudyMaterial) -> Unit,
+    isGeneratingFlashcards: Boolean = false,
     onExit: () -> Unit
 ) {
     ImmersiveSystemBarsEffect()
-    BackHandler { onExit() }
+    BackHandler {
+        if (readerAiState.isVisible) {
+            onDismissReaderAi()
+        } else {
+            onExit()
+        }
+    }
 
     val context = LocalContext.current
     val hasUrl = material.sourceUrl.isNotBlank()
@@ -143,13 +177,43 @@ fun FullScreenReadingViewer(
     var showPdfView by remember(material.id, hasBundledPdf) { mutableStateOf(hasBundledPdf) }
     var showWebPreview by remember(material.id, hasUrl) { mutableStateOf(hasUrl && !hasBundledPdf) }
     var showNotesSheet by remember { mutableStateOf(false) }
+    var showCustomPassageDialog by remember { mutableStateOf(false) }
+    var customPassageSeed by remember { mutableStateOf("") }
     var hideChrome by remember { mutableStateOf(false) }
+    var isLandscapeMode by remember(material.id) { mutableStateOf(false) }
     var readerFontSize by remember { mutableFloatStateOf(17f) }
     var webLoadProgress by remember { mutableIntStateOf(0) }
     var notesDraft by remember(progress?.personalNotes) {
         mutableStateOf(progress?.personalNotes.orEmpty())
     }
     var customVideoView by remember { mutableStateOf<View?>(null) }
+
+    fun openPassageAiHelper() {
+        val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+        val clipText = clipboard.primaryClip
+            ?.takeIf { it.itemCount > 0 }
+            ?.getItemAt(0)
+            ?.coerceToText(context)
+            ?.toString()
+            ?.trim()
+            .orEmpty()
+        customPassageSeed = clipText
+        showCustomPassageDialog = true
+    }
+
+    val activity = context as? Activity
+    DisposableEffect(activity, isLandscapeMode) {
+        if (activity != null) {
+            activity.requestedOrientation = if (isLandscapeMode) {
+                ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+            } else {
+                ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            }
+        }
+        onDispose {
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
 
     val isCompleted = progress?.completed == true
 
@@ -219,6 +283,25 @@ fun FullScreenReadingViewer(
                             }
 
                             IconButton(
+                                onClick = { isLandscapeMode = !isLandscapeMode },
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .testTag("fullscreen_rotate_button")
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Rounded.ScreenRotation,
+                                    contentDescription = if (isLandscapeMode) "Switch to Portrait" else "Rotate to Landscape",
+                                    tint = if (isLandscapeMode) {
+                                        if (openAsVideo) Color(0xFF2DD4BF) else MaterialTheme.colorScheme.secondary
+                                    } else if (openAsVideo) {
+                                        Color.White
+                                    } else {
+                                        MaterialTheme.colorScheme.onSurface
+                                    }
+                                )
+                            }
+
+                            IconButton(
                                 onClick = { showNotesSheet = !showNotesSheet },
                                 modifier = Modifier.size(48.dp)
                             ) {
@@ -244,11 +327,13 @@ fun FullScreenReadingViewer(
 
                             IconButton(
                                 onClick = { hideChrome = true },
-                                modifier = Modifier.size(48.dp)
+                                modifier = Modifier
+                                    .size(48.dp)
+                                    .testTag("maximize_pure_fullscreen_button")
                             ) {
                                 Icon(
-                                    imageVector = Icons.Rounded.VisibilityOff,
-                                    contentDescription = "Hide top bar for pure full-screen",
+                                    imageVector = Icons.Rounded.Fullscreen,
+                                    contentDescription = "Maximize edge-to-edge full-screen",
                                     tint = if (openAsVideo) Color.White else MaterialTheme.colorScheme.onSurface
                                 )
                             }
@@ -273,6 +358,25 @@ fun FullScreenReadingViewer(
                                     label = { Text("Index & Solutions") }
                                 )
                                 Spacer(Modifier.weight(1f))
+                                OutlinedButton(
+                                    onClick = { onGenerateFlashcards(material) },
+                                    enabled = !isGeneratingFlashcards,
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    modifier = Modifier.testTag("pdf_make_flashcards_button")
+                                ) {
+                                    if (isGeneratingFlashcards) {
+                                        androidx.compose.material3.CircularProgressIndicator(
+                                            modifier = Modifier.size(14.dp),
+                                            strokeWidth = 2.dp
+                                        )
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Creating...", style = MaterialTheme.typography.labelSmall)
+                                    } else {
+                                        Icon(Icons.Rounded.Style, contentDescription = null, modifier = Modifier.size(15.dp))
+                                        Spacer(Modifier.width(4.dp))
+                                        Text("Cards", style = MaterialTheme.typography.labelSmall)
+                                    }
+                                }
                                 OutlinedButton(
                                     onClick = { onAskTutor(material) },
                                     contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp)
@@ -301,6 +405,15 @@ fun FullScreenReadingViewer(
                                     label = { Text("Reader & Summary") }
                                 )
                                 Spacer(Modifier.weight(1f))
+                                OutlinedButton(
+                                    onClick = { openPassageAiHelper() },
+                                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 4.dp),
+                                    modifier = Modifier.testTag("webview_selection_ai_button")
+                                ) {
+                                    Icon(Icons.Rounded.Psychology, contentDescription = null, modifier = Modifier.size(15.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("Selection AI", style = MaterialTheme.typography.labelSmall)
+                                }
                                 OutlinedButton(
                                     onClick = {
                                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(material.sourceUrl))
@@ -335,6 +448,9 @@ fun FullScreenReadingViewer(
                     PdfBookViewer(
                         assetPath = material.assetPath,
                         chapters = chapters,
+                        onAiAnalyzePage = { action, pageNum, bmp ->
+                            onRunReaderAiAction(action, "", "Page $pageNum", bmp)
+                        },
                         modifier = Modifier.fillMaxSize()
                     )
                 } else if (showWebPreview && embedUrl.isNotBlank()) {
@@ -380,79 +496,150 @@ fun FullScreenReadingViewer(
                         }
                     )
                 } else {
-                    Column(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .verticalScroll(rememberScrollState())
-                            .padding(22.dp)
-                            .navigationBarsPadding(),
-                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    val accentColor = MaterialTheme.colorScheme.secondary
+                    val styledMarkdown = remember(material.contentMarkdown, accentColor) {
+                        buildStyledStudyText(material.contentMarkdown, accentColor)
+                    }
+
+                    SelectableAiReaderArea(
+                        onAiAction = { action, selectedText ->
+                            onRunReaderAiAction(action, selectedText, null, null)
+                        },
+                        modifier = Modifier.fillMaxSize()
                     ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            modifier = Modifier.fillMaxWidth()
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .verticalScroll(rememberScrollState())
+                                .padding(start = 22.dp, end = 22.dp, top = 16.dp, bottom = 96.dp)
+                                .navigationBarsPadding(),
+                            verticalArrangement = Arrangement.spacedBy(14.dp)
                         ) {
-                            Text(
-                                text = material.category.uppercase(),
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.secondary
-                            )
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                IconButton(
-                                    onClick = { readerFontSize = (readerFontSize - 2f).coerceAtLeast(14f) }
+                            Surface(
+                                shape = RoundedCornerShape(14.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.65f),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
-                                    Text("A-", style = MaterialTheme.typography.titleSmall)
-                                }
-                                Icon(Icons.Rounded.FormatSize, contentDescription = "Font size", modifier = Modifier.size(18.dp))
-                                IconButton(
-                                    onClick = { readerFontSize = (readerFontSize + 2f).coerceAtMost(26f) }
-                                ) {
-                                    Text("A+", style = MaterialTheme.typography.titleMedium)
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                        modifier = Modifier.weight(1f)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Rounded.AutoAwesome,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.secondary,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                        Text(
+                                            text = "Long-press & drag any text to get AI Bullet Notes or Explanations",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                                        )
+                                    }
+                                    TextButton(
+                                        onClick = { openPassageAiHelper() },
+                                        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                        modifier = Modifier.testTag("open_custom_passage_ai_button")
+                                    ) {
+                                        Text("Paste/Type", style = MaterialTheme.typography.labelMedium)
+                                    }
                                 }
                             }
-                        }
 
-                        Text(
-                            text = material.title,
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-
-                        if (material.description.isNotBlank()) {
-                            Text(
-                                text = material.description,
-                                fontSize = readerFontSize.sp,
-                                lineHeight = (readerFontSize * 1.45f).sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-
-                        if (material.contentMarkdown.isNotBlank()) {
-                            Surface(
-                                shape = RoundedCornerShape(18.dp),
-                                color = MaterialTheme.colorScheme.surface,
-                                tonalElevation = 2.dp,
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.SpaceBetween,
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
-                                    text = material.contentMarkdown,
+                                    text = material.category.uppercase(),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.secondary
+                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    IconButton(
+                                        onClick = { readerFontSize = (readerFontSize - 2f).coerceAtLeast(14f) }
+                                    ) {
+                                        Text("A-", style = MaterialTheme.typography.titleSmall)
+                                    }
+                                    Icon(Icons.Rounded.FormatSize, contentDescription = "Font size", modifier = Modifier.size(18.dp))
+                                    IconButton(
+                                        onClick = { readerFontSize = (readerFontSize + 2f).coerceAtMost(26f) }
+                                    ) {
+                                        Text("A+", style = MaterialTheme.typography.titleMedium)
+                                    }
+                                }
+                            }
+
+                            Text(
+                                text = material.title,
+                                style = MaterialTheme.typography.headlineMedium,
+                                color = MaterialTheme.colorScheme.onBackground
+                            )
+
+                            if (material.description.isNotBlank()) {
+                                Text(
+                                    text = material.description,
                                     fontSize = readerFontSize.sp,
-                                    lineHeight = (readerFontSize * 1.55f).sp,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.padding(18.dp)
+                                    lineHeight = (readerFontSize * 1.45f).sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
-                        }
 
-                        Button(
-                            onClick = { onAskTutor(material) },
-                            shape = RoundedCornerShape(14.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Icon(Icons.Rounded.AutoAwesome, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Ask AI Tutor to Summarize or Quiz This")
+                            if (material.contentMarkdown.isNotBlank()) {
+                                Surface(
+                                    shape = RoundedCornerShape(18.dp),
+                                    color = MaterialTheme.colorScheme.surface,
+                                    tonalElevation = 2.dp,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = styledMarkdown,
+                                        fontSize = readerFontSize.sp,
+                                        lineHeight = (readerFontSize * 1.55f).sp,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        modifier = Modifier.padding(18.dp)
+                                    )
+                                }
+                            }
+
+                            Button(
+                                onClick = { onAskTutor(material) },
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(Icons.Rounded.AutoAwesome, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text("Open Full Study Breakdown in AI Tutor")
+                            }
+
+                            OutlinedButton(
+                                onClick = { onGenerateFlashcards(material) },
+                                enabled = !isGeneratingFlashcards,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .testTag("reader_make_flashcards_button")
+                            ) {
+                                if (isGeneratingFlashcards) {
+                                    androidx.compose.material3.CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Generating Flashcards...")
+                                } else {
+                                    Icon(Icons.Rounded.Style, contentDescription = null)
+                                    Spacer(Modifier.width(8.dp))
+                                    Text("Generate Flashcards from This Reading")
+                                }
+                            }
                         }
                     }
                 }
@@ -523,7 +710,29 @@ fun FullScreenReadingViewer(
                         }
                     }
                 }
+
+                // Inline AI Selection Summary / Concept Explanation Sheet
+                ReaderAiAssistantSheet(
+                    state = readerAiState,
+                    onSwitchAction = onSwitchReaderAiAction,
+                    onRetry = onRetryReaderAi,
+                    onSaveToNotes = onSaveReaderAiToNotes,
+                    onContinueInTutor = onContinueReaderAiInTutor,
+                    onDismiss = onDismissReaderAi,
+                    modifier = Modifier.align(Alignment.BottomCenter)
+                )
             }
+        }
+
+        if (showCustomPassageDialog) {
+            CustomPassageAiDialog(
+                initialText = customPassageSeed,
+                onRunAction = { action, passage ->
+                    showCustomPassageDialog = false
+                    onRunReaderAiAction(action, passage, null, null)
+                },
+                onDismiss = { showCustomPassageDialog = false }
+            )
         }
 
         // Floating restore button when pure full-screen chrome is hidden
@@ -567,32 +776,50 @@ fun FullScreenReadingViewer(
 
 @Composable
 fun FullScreenMcqExam(
-    topic: String,
-    questions: List<McqQuestion>,
-    onSubmitScore: (Int, Int, Long) -> Unit,
+    session: QuizSessionState,
+    onSelectOption: (Int, Int) -> Unit,
+    onSelectQuestionIndex: (Int) -> Unit,
+    onResetQuiz: () -> Unit,
+    onSubmitQuiz: () -> Unit,
     onExit: () -> Unit
 ) {
     ImmersiveSystemBarsEffect()
     BackHandler { onExit() }
 
-    var currentIndex by remember { mutableIntStateOf(0) }
-    val selectedAnswers = remember { mutableStateMapOf<Int, Int>() }
-    var isSubmitted by remember { mutableStateOf(false) }
-    var elapsedSeconds by remember { mutableIntStateOf(0) }
-
-    LaunchedEffect(isSubmitted) {
-        while (!isSubmitted) {
-            delay(1000L)
-            elapsedSeconds += 1
-        }
+    Surface(
+        color = MaterialTheme.colorScheme.background,
+        modifier = Modifier.fillMaxSize()
+    ) {
+        McqQuizArenaContent(
+            session = session,
+            isFullScreen = true,
+            onToggleFullScreen = onExit,
+            onSelectOption = onSelectOption,
+            onSelectQuestionIndex = onSelectQuestionIndex,
+            onResetQuiz = onResetQuiz,
+            onSubmitQuiz = onSubmitQuiz,
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+        )
     }
+}
 
-    val currentQuestion = questions.getOrNull(currentIndex)
-    val correctCount = remember(isSubmitted, selectedAnswers.size) {
-        questions.indices.count { idx ->
-            selectedAnswers[idx] == questions[idx].correctIndex
-        }
-    }
+@Composable
+fun FullScreenRoadmapScreen(
+    materials: List<StudyMaterial>,
+    progressMap: Map<String, MaterialProgress>,
+    plans: List<StudyPlanItem>,
+    attempts: List<QuizAttempt>,
+    onOpenMaterial: (StudyMaterial, Boolean) -> Unit,
+    onToggleMaterialComplete: (String, Boolean, Long) -> Unit,
+    onLaunchMcqBank: (McqBank) -> Unit,
+    onTogglePlanItem: (String, Boolean) -> Unit,
+    onExit: () -> Unit
+) {
+    ImmersiveSystemBarsEffect()
+    BackHandler { onExit() }
 
     Surface(
         color = MaterialTheme.colorScheme.background,
@@ -604,7 +831,6 @@ fun FullScreenMcqExam(
                 .statusBarsPadding()
                 .navigationBarsPadding()
         ) {
-            // Top Full-Screen Exam Bar
             Surface(
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 3.dp
@@ -612,266 +838,54 @@ fun FullScreenMcqExam(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     IconButton(
                         onClick = onExit,
                         modifier = Modifier
                             .size(48.dp)
-                            .testTag("exit_fullscreen_mcq_button")
+                            .testTag("exit_fullscreen_roadmap_button")
                     ) {
-                        Icon(Icons.Rounded.FullscreenExit, contentDescription = "Exit Full-Screen Exam")
+                        Icon(
+                            imageVector = Icons.Rounded.FullscreenExit,
+                            contentDescription = "Exit Full-Screen Roadmap"
+                        )
                     }
                     Column(modifier = Modifier.weight(1f)) {
                         Text(
-                            text = topic,
-                            style = MaterialTheme.typography.titleSmall,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
+                            text = "Study Roadmap & Milestones",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
                         )
                         Text(
-                            text = "FULL-SCREEN MCQ ARENA",
+                            text = "FULL-SCREEN PROGRESS TRACKER",
                             style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.secondary
                         )
                     }
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.secondaryContainer
-                    ) {
-                        val mins = elapsedSeconds / 60
-                        val secs = elapsedSeconds % 60
-                        Text(
-                            text = "%02d:%02d".format(mins, secs),
-                            style = MaterialTheme.typography.labelLarge,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
-                    }
                 }
             }
 
-            // Question Navigator Pills
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                modifier = Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState())
+                    .padding(16.dp)
             ) {
-                itemsIndexed(questions) { index, q ->
-                    val answered = selectedAnswers.containsKey(index)
-                    val isCurrent = index == currentIndex
-                    val pillColor = when {
-                        isSubmitted && selectedAnswers[index] == q.correctIndex -> Color(0xFF059669)
-                        isSubmitted -> MaterialTheme.colorScheme.error
-                        isCurrent -> MaterialTheme.colorScheme.primary
-                        answered -> MaterialTheme.colorScheme.secondaryContainer
-                        else -> MaterialTheme.colorScheme.surfaceVariant
-                    }
-                    val textColor = when {
-                        isSubmitted || isCurrent -> Color.White
-                        answered -> MaterialTheme.colorScheme.onSecondaryContainer
-                        else -> MaterialTheme.colorScheme.onSurfaceVariant
-                    }
-                    Surface(
-                        shape = CircleShape,
-                        color = pillColor,
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .clickable { currentIndex = index }
-                    ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Text(
-                                text = "${index + 1}",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = textColor
-                            )
-                        }
-                    }
-                }
-            }
-
-            if (currentQuestion != null) {
-                Column(
-                    modifier = Modifier
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(18.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    if (isSubmitted) {
-                        Card(
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
-                            ) {
-                                Column {
-                                    Text(
-                                        text = "Exam Completed",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer
-                                    )
-                                    Text(
-                                        text = "Score: $correctCount / ${questions.size} (${(correctCount * 100) / questions.size.coerceAtLeast(1)}%)",
-                                        style = MaterialTheme.typography.headlineSmall,
-                                        color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                        fontWeight = FontWeight.Bold
-                                    )
-                                }
-                                Button(onClick = onExit) {
-                                    Text("Done")
-                                }
-                            }
-                        }
-                    }
-
-                    Text(
-                        text = "Question ${currentIndex + 1} of ${questions.size}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                    Text(
-                        text = currentQuestion.question,
-                        style = MaterialTheme.typography.headlineSmall,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-
-                    currentQuestion.options.forEachIndexed { optIdx, optionText ->
-                        val isSelected = selectedAnswers[currentIndex] == optIdx
-                        val isCorrectOption = optIdx == currentQuestion.correctIndex
-
-                        val containerColor = when {
-                            isSubmitted && isCorrectOption -> Color(0xFF059669).copy(alpha = 0.16f)
-                            isSubmitted && isSelected && !isCorrectOption -> MaterialTheme.colorScheme.error.copy(alpha = 0.16f)
-                            isSelected -> MaterialTheme.colorScheme.secondaryContainer
-                            else -> MaterialTheme.colorScheme.surface
-                        }
-
-                        Card(
-                            shape = RoundedCornerShape(16.dp),
-                            colors = CardDefaults.cardColors(containerColor = containerColor),
-                            elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 3.dp else 1.dp),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(16.dp))
-                                .clickable(enabled = !isSubmitted) {
-                                    selectedAnswers[currentIndex] = optIdx
-                                }
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(16.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(12.dp)
-                            ) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text(
-                                            text = ('A' + optIdx).toString(),
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                                Text(
-                                    text = optionText,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.onSurface,
-                                    modifier = Modifier.weight(1f)
-                                )
-                            }
-                        }
-                    }
-
-                    if (isSubmitted) {
-                        Surface(
-                            shape = RoundedCornerShape(16.dp),
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(14.dp),
-                                verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                Text(
-                                    text = "AI Tutor Explanation",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.secondary
-                                )
-                                Text(
-                                    text = currentQuestion.explanation,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Bottom Exam Navigation Bar
-            Surface(
-                color = MaterialTheme.colorScheme.surface,
-                tonalElevation = 4.dp
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(14.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    OutlinedButton(
-                        onClick = { if (currentIndex > 0) currentIndex -= 1 },
-                        enabled = currentIndex > 0,
-                        modifier = Modifier
-                            .weight(1f)
-                            .height(48.dp)
-                    ) {
-                        Text("Previous")
-                    }
-
-                    if (!isSubmitted && currentIndex == questions.lastIndex) {
-                        Button(
-                            onClick = {
-                                isSubmitted = true
-                                onSubmitScore(questions.size, correctCount, elapsedSeconds.toLong())
-                            },
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary),
-                            modifier = Modifier
-                                .weight(1.3f)
-                                .height(48.dp)
-                                .testTag("submit_mcq_exam_button")
-                        ) {
-                            Text("Submit Exam", fontWeight = FontWeight.Bold)
-                        }
-                    } else {
-                        Button(
-                            onClick = {
-                                if (currentIndex < questions.lastIndex) {
-                                    currentIndex += 1
-                                } else {
-                                    onExit()
-                                }
-                            },
-                            modifier = Modifier
-                                .weight(1.3f)
-                                .height(48.dp)
-                        ) {
-                            Text(if (currentIndex < questions.lastIndex) "Next Question" else "Finish")
-                        }
-                    }
-                }
+                StudyRoadmapCard(
+                    materials = materials,
+                    progressMap = progressMap,
+                    plans = plans,
+                    attempts = attempts,
+                    onOpenMaterial = onOpenMaterial,
+                    onToggleMaterialComplete = onToggleMaterialComplete,
+                    onLaunchMcqBank = onLaunchMcqBank,
+                    onTogglePlanItem = onTogglePlanItem,
+                    isFullScreen = true,
+                    onToggleFullScreen = onExit
+                )
             }
         }
     }
@@ -882,6 +896,14 @@ fun FullScreenTutorStudio(
     messages: List<TutorMessage>,
     streamingText: String?,
     tutorState: AiTaskState,
+    engineMode: TutorEngineMode = TutorEngineMode.GEMINI_BUILTIN,
+    freeRefState: AiTaskState = AiTaskState.Idle,
+    freeRefResult: FreeReferenceResult? = null,
+    onSelectEngine: (TutorEngineMode) -> Unit = {},
+    onLookupWiki: (String) -> Unit = {},
+    onLookupDictionary: (String) -> Unit = {},
+    onDismissReference: () -> Unit = {},
+    onAskTutorAboutReference: (FreeReferenceResult) -> Unit = {},
     onSendMessage: (String, Bitmap?) -> Unit,
     onExit: () -> Unit
 ) {
@@ -898,8 +920,16 @@ fun FullScreenTutorStudio(
             messages = messages,
             streamingText = streamingText,
             tutorState = tutorState,
+            engineMode = engineMode,
+            freeRefState = freeRefState,
+            freeRefResult = freeRefResult,
             isFullScreen = true,
             onToggleFullScreen = onExit,
+            onSelectEngine = onSelectEngine,
+            onLookupWiki = onLookupWiki,
+            onLookupDictionary = onLookupDictionary,
+            onDismissReference = onDismissReference,
+            onAskTutorAboutReference = onAskTutorAboutReference,
             onSendMessage = onSendMessage
         )
     }

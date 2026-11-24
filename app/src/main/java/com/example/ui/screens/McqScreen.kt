@@ -22,10 +22,8 @@ import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.PlayArrow
-import androidx.compose.material.icons.rounded.Quiz
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -49,9 +47,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.McqBank
-import com.example.data.McqQuestion
 import com.example.data.OmMcqBanks
 import com.example.data.QuizAttempt
+import com.example.data.QuizSessionState
+import com.example.ui.components.McqQuizArenaContent
 import com.example.viewmodel.AiTaskState
 import com.example.viewmodel.StreamUiState
 import kotlin.math.roundToInt
@@ -67,11 +66,15 @@ private val OmQuickTopics = listOf(
 @Composable
 fun McqScreen(
     mcqGenState: AiTaskState,
-    currentQuiz: Pair<String, List<McqQuestion>>?,
+    quizSession: QuizSessionState,
     attemptsState: StreamUiState<List<QuizAttempt>>,
     onSelectMcqBank: (McqBank, Boolean) -> Unit,
     onGenerateAndStartFullScreen: (String, String, Int, Boolean) -> Unit,
-    onStartCurrentFullScreen: () -> Unit
+    onStartCurrentFullScreen: () -> Unit,
+    onSelectOption: (Int, Int) -> Unit,
+    onSelectQuestionIndex: (Int) -> Unit,
+    onResetQuiz: () -> Unit,
+    onSubmitQuiz: () -> Unit
 ) {
     var topicInput by remember { mutableStateOf("Balanced Scorecard & Performance Pyramid (OM Unit 14)") }
     var notesInput by remember { mutableStateOf("") }
@@ -83,75 +86,49 @@ fun McqScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                Text(
-                    text = "MCQ Testing Arena",
-                    style = MaterialTheme.typography.headlineSmall,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                Text(
-                    text = "Practice curated ICMA M3 Organizational Management question banks or generate custom AI MCQs for Full-Screen Exam Mode.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "MCQ Testing Arena",
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Text(
+                        text = "Solve quizzes inline or toggle Full-Screen Exam Mode anytime without losing your progress.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
 
-        // Ready Quiz Full-Screen Launcher Card
-        if (currentQuiz != null) {
+        // Interactive Live Quiz Card with Full-Screen Mode Toggle
+        if (quizSession.questions.isNotEmpty()) {
             item {
                 Card(
                     shape = RoundedCornerShape(22.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                    modifier = Modifier.fillMaxWidth()
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 3.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("inline_quiz_card")
                 ) {
-                    Column(
-                        modifier = Modifier.padding(18.dp),
-                        verticalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Quiz,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                            Text(
-                                text = "READY FOR EXAM",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        }
-                        Text(
-                            text = currentQuiz.first,
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "${currentQuiz.second.size} multiple-choice questions with instant tutor explanations.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
-                        )
-                        Button(
-                            onClick = onStartCurrentFullScreen,
-                            shape = RoundedCornerShape(14.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primary,
-                                contentColor = MaterialTheme.colorScheme.onPrimary
-                            ),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(50.dp)
-                                .testTag("start_fullscreen_mcq_button")
-                        ) {
-                            Icon(Icons.Rounded.Fullscreen, contentDescription = null)
-                            Spacer(Modifier.width(8.dp))
-                            Text("Click for Full-Screen MCQ Test", fontWeight = FontWeight.Bold)
-                        }
-                    }
+                    McqQuizArenaContent(
+                        session = quizSession,
+                        isFullScreen = false,
+                        onToggleFullScreen = onStartCurrentFullScreen,
+                        onSelectOption = onSelectOption,
+                        onSelectQuestionIndex = onSelectQuestionIndex,
+                        onResetQuiz = onResetQuiz,
+                        onSubmitQuiz = onSubmitQuiz
+                    )
                 }
             }
         }

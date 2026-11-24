@@ -31,6 +31,7 @@ import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.PictureAsPdf
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
+import androidx.compose.material.icons.rounded.Style
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -79,6 +80,7 @@ fun MaterialsScreen(
     progressMapState: StreamUiState<Map<String, MaterialProgress>>,
     onOpenFullScreen: (StudyMaterial, Boolean) -> Unit,
     onAskTutor: (StudyMaterial) -> Unit,
+    onGenerateFlashcards: (StudyMaterial) -> Unit,
     onToggleComplete: (String, Boolean, Long) -> Unit,
     onAddCustomMaterial: (String, String, MaterialType, String, String, String, Long) -> Unit,
     onDeleteCustomMaterial: (String) -> Unit
@@ -145,7 +147,7 @@ fun MaterialsScreen(
                                 color = MaterialTheme.colorScheme.onBackground
                             )
                             Text(
-                                text = "Read bundled ICMA M3 Organizational Management PDFs offline or open your Drive clips & docs in Full-Screen.",
+                                text = "Toggle Full-Screen Mode on any reading PDF, Google Doc, Drive folder, or video clip for distraction-free focus.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -171,6 +173,7 @@ fun MaterialsScreen(
                             isCompleted = isCompleted,
                             onOpenFullScreen = { asVideo -> onOpenFullScreen(material, asVideo) },
                             onAskTutor = { onAskTutor(material) },
+                            onGenerateFlashcards = { onGenerateFlashcards(material) },
                             onToggleComplete = {
                                 onToggleComplete(material.id, !isCompleted, if (!isCompleted) material.estimatedMinutes else 0L)
                             },
@@ -219,6 +222,7 @@ private fun MaterialCard(
     isCompleted: Boolean,
     onOpenFullScreen: (Boolean) -> Unit,
     onAskTutor: () -> Unit,
+    onGenerateFlashcards: () -> Unit,
     onToggleComplete: () -> Unit,
     onOpenExternal: () -> Unit,
     onDelete: (() -> Unit)?
@@ -367,9 +371,21 @@ private fun MaterialCard(
                 OutlinedButton(
                     onClick = onAskTutor,
                     shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp),
                     modifier = Modifier.height(48.dp)
                 ) {
                     Icon(Icons.Rounded.AutoAwesome, contentDescription = "Ask AI Tutor", modifier = Modifier.size(18.dp))
+                }
+
+                OutlinedButton(
+                    onClick = onGenerateFlashcards,
+                    shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp),
+                    modifier = Modifier
+                        .height(48.dp)
+                        .testTag("make_flashcards_${material.id}")
+                ) {
+                    Icon(Icons.Rounded.Style, contentDescription = "Generate flashcards from ${material.title}", modifier = Modifier.size(18.dp))
                 }
 
                 if (material.sourceUrl.isNotBlank()) {

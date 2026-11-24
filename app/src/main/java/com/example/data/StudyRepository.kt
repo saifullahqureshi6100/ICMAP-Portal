@@ -136,6 +136,23 @@ class StudyRepository(
         )
     }
 
+    fun observeFlashcards(userId: String): Flow<List<Flashcard>> = flow {
+        require(userId.isNotBlank())
+        val path = "users/$userId/flashcards"
+        emitAll(
+            db.collection("users").document(userId).collection("flashcards")
+                .orderBy("createdAt", Query.Direction.DESCENDING)
+                .snapshots()
+                .map { snap ->
+                    snap.toObjects(
+                        Flashcard::class.java,
+                        DocumentSnapshot.ServerTimestampBehavior.ESTIMATE
+                    )
+                }
+                .logFirestoreErrors(userId, OperationType.LIST, path)
+        )
+    }
+
     suspend fun ensureUserProfile(userId: String, displayName: String): Result<Unit> {
         val path = "users/$userId"
         return try {
@@ -455,6 +472,134 @@ class StudyRepository(
             throw e
         } catch (e: Exception) {
             handleFirestoreError(e, OperationType.CREATE, path)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun saveGeneratedFlashcards(
+        userId: String,
+        materialId: String,
+        deckTitle: String,
+        cards: List<GeneratedFlashcard>
+    ): Result<Int> {
+        val basePath = "users/$userId/flashcards"
+        return try {
+            val uid = requireUserId(userId)
+            val safeMaterialId = materialId.replace(Regex("[^a-zA-Z0-9_\\-]"), "_").take(128)
+            val safeDeckTitle = deckTitle.trim().ifBlank { "Study Flashcards" }.take(140)
+            val batch = db.batch()
+            var count = 0
+            for (card in cards) {
+                val safeFront = card.front.trim().take(500)
+                val safeBack = card.back.trim().take(1500)
+                if (safeFront.isEmpty() || safeBack.isEmpty()) continue
+                val id = "fc_${UUID.randomUUID().toString().replace("-", "").take(16)}"
+                val docRef = db.document("$basePath/$id")
+                val payload = mapOf(
+                    "userId" to uid,
+                    "materialId" to safeMaterialId,
+                    "deckTitle" to safeDeckTitle,
+                    "front" to safeFront,
+                    "back" to safeBack,
+                    "hint" to card.hint.trim().take(300),
+                    "mastered" to false,
+                    "reviewCount" to 0L,
+                    "createdAt" to FieldValue.serverTimestamp(),
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+                batch.set(docRef, payload)
+                count++
+            }
+            require(count > 0) { "No valid flashcards to save." }
+            batch.commit().await()
+            Result.success(count)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.CREATE, basePath)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun addCustomFlashcard(
+        userId: String,
+        materialId: String,
+        deckTitle: String,
+        front: String,
+        back: String,
+        hint: String
+    ): Result<Unit> {
+        val id = "fc_${UUID.randomUUID().toString().replace("-", "").take(16)}"
+        val path = "users/$userId/flashcards/$id"
+        return try {
+            val uid = requireUserId(userId)
+            val safeFront = front.trim().take(500)
+            val safeBack = back.trim().take(1500)
+            require(safeFront.isNotEmpty() && safeBack.isNotEmpty()) {
+                "Front prompt and back answer cannot be empty."
+            }
+            val safeMaterialId = materialId.replace(Regex("[^a-zA-Z0-9_\\-]"), "_").take(128)
+            val safeDeckTitle = deckTitle.trim().ifBlank { "Custom Flashcards" }.take(140)
+            val payload = mapOf(
+                "userId" to uid,
+                "materialId" to safeMaterialId,
+                "deckTitle" to safeDeckTitle,
+                "front" to safeFront,
+                "back" to safeBack,
+                "hint" to hint.trim().take(300),
+                "mastered" to false,
+                "reviewCount" to 0L,
+                "createdAt" to FieldValue.serverTimestamp(),
+                "updatedAt" to FieldValue.serverTimestamp()
+            )
+            db.document(path).set(payload).await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.CREATE, path)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun updateFlashcardMastery(
+        userId: String,
+        cardId: String,
+        mastered: Boolean,
+        currentReviewCount: Long
+    ): Result<Unit> {
+        val path = "users/$userId/flashcards/$cardId"
+        return try {
+            requireUserId(userId)
+            require(cardId.isNotBlank())
+            val nextReviews = (currentReviewCount + 1L).coerceIn(0L, 100000L)
+            db.document(path).update(
+                mapOf(
+                    "mastered" to mastered,
+                    "reviewCount" to nextReviews,
+                    "updatedAt" to FieldValue.serverTimestamp()
+                )
+            ).await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.UPDATE, path)
+            Result.failure(e)
+        }
+    }
+
+    suspend fun deleteFlashcard(userId: String, cardId: String): Result<Unit> {
+        val path = "users/$userId/flashcards/$cardId"
+        return try {
+            requireUserId(userId)
+            require(cardId.isNotBlank())
+            db.document(path).delete().await()
+            Result.success(Unit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            handleFirestoreError(e, OperationType.DELETE, path)
             Result.failure(e)
         }
     }

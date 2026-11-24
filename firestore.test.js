@@ -334,4 +334,100 @@ test("StudyPlans & QuizAttempts: owner workflows and strict bounds", async () =>
   await assertFails(
     bobDb.collection("users").doc(ALICE_UID).collection("quizAttempts").get()
   );
+  await assertFails(
+    bobDb.collection("users").doc(ALICE_UID).collection("flashcards").get()
+  );
+});
+
+test("Flashcards: owner create, mastery update, delete, immutable guards, and cross-user denial", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  const created = new Date(Date.now() - 10000);
+
+  await assertSucceeds(
+    aliceDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("flashcards")
+      .doc("fc_1")
+      .set({
+        userId: ALICE_UID,
+        materialId: "om_study_text_2026",
+        deckTitle: "M3 Organizational Management",
+        front: "How is Overall Equipment Effectiveness (OEE) calculated?",
+        back: "OEE = Availability x Performance x Quality.",
+        hint: "Multiply three operational ratios.",
+        mastered: false,
+        reviewCount: 0,
+        createdAt: created,
+        updatedAt: created,
+      })
+  );
+
+  await assertSucceeds(
+    aliceDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("flashcards")
+      .doc("fc_1")
+      .update({
+        mastered: true,
+        reviewCount: 1,
+        updatedAt: new Date(Date.now() - 1000),
+      })
+  );
+
+  // Reject mutating front/back on review update
+  await assertFails(
+    aliceDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("flashcards")
+      .doc("fc_1")
+      .update({
+        front: "Tampered question",
+        updatedAt: new Date(Date.now() - 500),
+      })
+  );
+
+  // Reject empty front prompt
+  await assertFails(
+    aliceDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("flashcards")
+      .doc("fc_bad")
+      .set({
+        userId: ALICE_UID,
+        materialId: "",
+        deckTitle: "Deck",
+        front: "",
+        back: "Answer",
+        hint: "",
+        mastered: false,
+        reviewCount: 0,
+        createdAt: created,
+        updatedAt: created,
+      })
+  );
+
+  // Cross-user write denied
+  await assertFails(
+    bobDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("flashcards")
+      .doc("fc_1")
+      .delete()
+  );
+
+  // Owner delete succeeds
+  await assertSucceeds(
+    aliceDb
+      .collection("users")
+      .doc(ALICE_UID)
+      .collection("flashcards")
+      .doc("fc_1")
+      .delete()
+  );
 });

@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -30,21 +31,29 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.Send
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
+import androidx.compose.material.icons.rounded.Public
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AssistChip
+import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.FilledIconButton
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -59,7 +68,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.data.FreeReferenceResult
+import com.example.data.TutorEngineMode
 import com.example.data.TutorMessage
 import com.example.viewmodel.AiTaskState
 import kotlin.math.max
@@ -79,13 +91,23 @@ fun TutorScreen(
     messages: List<TutorMessage>,
     streamingText: String?,
     tutorState: AiTaskState,
+    engineMode: TutorEngineMode = TutorEngineMode.GEMINI_BUILTIN,
+    freeRefState: AiTaskState = AiTaskState.Idle,
+    freeRefResult: FreeReferenceResult? = null,
     isFullScreen: Boolean,
     onToggleFullScreen: () -> Unit,
+    onSelectEngine: (TutorEngineMode) -> Unit = {},
+    onLookupWiki: (String) -> Unit = {},
+    onLookupDictionary: (String) -> Unit = {},
+    onDismissReference: () -> Unit = {},
+    onAskTutorAboutReference: (FreeReferenceResult) -> Unit = {},
     onSendMessage: (String, Bitmap?) -> Unit
 ) {
     val context = LocalContext.current
     var inputText by remember { mutableStateOf("") }
     var attachedBitmap by remember { mutableStateOf<Bitmap?>(null) }
+    var showFreeLookupBar by remember { mutableStateOf(false) }
+    var lookupQuery by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
@@ -114,56 +136,270 @@ fun TutorScreen(
             tonalElevation = 2.dp,
             modifier = Modifier.fillMaxWidth()
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                    modifier = Modifier.weight(1f)
+                    horizontalArrangement = Arrangement.SpaceBetween
                 ) {
-                    Surface(
-                        shape = CircleShape,
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        modifier = Modifier.size(38.dp)
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.weight(1f)
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Rounded.AutoAwesome,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.size(20.dp)
+                        Surface(
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Rounded.AutoAwesome,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+                        }
+                        Column {
+                            Text(
+                                text = "Socratic AI Study Tutor",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = engineMode.subtitle,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
                     }
-                    Column {
-                        Text(
-                            text = "Socratic AI Study Tutor",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Text(
-                            text = "Explanations • Flashcards • Vision Notes Q&A",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+
+                    IconButton(
+                        onClick = onToggleFullScreen,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .testTag("toggle_fullscreen_tutor_button")
+                    ) {
+                        Icon(
+                            imageVector = if (isFullScreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
+                            contentDescription = if (isFullScreen) "Exit Full-Screen Tutor" else "Full-Screen Tutor"
                         )
                     }
                 }
 
-                IconButton(
-                    onClick = onToggleFullScreen,
-                    modifier = Modifier
-                        .size(48.dp)
-                        .testTag("toggle_fullscreen_tutor_button")
+                // $0 Zero-Key AI Engine Switcher & Free Public Lookup Triggers
+                LazyRow(
+                    contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Icon(
-                        imageVector = if (isFullScreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
-                        contentDescription = if (isFullScreen) "Exit Full-Screen Tutor" else "Full-Screen Tutor"
+                    items(TutorEngineMode.entries) { mode ->
+                        FilterChip(
+                            selected = engineMode == mode,
+                            onClick = { onSelectEngine(mode) },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = if (mode == TutorEngineMode.GEMINI_BUILTIN) {
+                                        Icons.Rounded.AutoAwesome
+                                    } else {
+                                        Icons.Rounded.Bolt
+                                    },
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = mode.label,
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            },
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .testTag("engine_chip_${mode.name.lowercase()}")
+                        )
+                    }
+
+                    item {
+                        AssistChip(
+                            onClick = {
+                                showFreeLookupBar = !showFreeLookupBar
+                                if (showFreeLookupBar && lookupQuery.isBlank() && inputText.isNotBlank()) {
+                                    lookupQuery = inputText.trim().take(60)
+                                }
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Rounded.Public,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            },
+                            label = {
+                                Text(
+                                    text = "Free Wiki / Dict ($0)",
+                                    style = MaterialTheme.typography.labelMedium
+                                )
+                            },
+                            modifier = Modifier
+                                .minimumInteractiveComponentSize()
+                                .testTag("toggle_free_reference_button")
+                        )
+                    }
+                }
+            }
+        }
+
+        // Collapsible Free Public API Lookup Bar (Wikipedia REST + Free Dictionary, $0, Zero Keys)
+        AnimatedVisibility(visible = showFreeLookupBar) {
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                tonalElevation = 1.dp,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = lookupQuery,
+                        onValueChange = { lookupQuery = it },
+                        placeholder = { Text("Search topic (e.g. Balanced Scorecard) or word (e.g. kaizen)") },
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null) },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("free_reference_input")
                     )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Button(
+                            onClick = { onLookupWiki(lookupQuery) },
+                            enabled = lookupQuery.isNotBlank() && freeRefState !is AiTaskState.Loading,
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                                .testTag("wiki_lookup_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Public,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Wikipedia Concept", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                        Button(
+                            onClick = { onLookupDictionary(lookupQuery) },
+                            enabled = lookupQuery.isNotBlank() && freeRefState !is AiTaskState.Loading,
+                            modifier = Modifier
+                                .weight(1f)
+                                .heightIn(min = 48.dp)
+                                .testTag("dictionary_lookup_button")
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.MenuBook,
+                                contentDescription = null,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(6.dp))
+                            Text("Dictionary Word", maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        }
+                    }
+                    if (freeRefState is AiTaskState.Loading) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            Text("Querying free public API ($0, no key)...", style = MaterialTheme.typography.labelMedium)
+                        }
+                    } else if (freeRefState is AiTaskState.Error) {
+                        Text(
+                            text = freeRefState.message,
+                            color = MaterialTheme.colorScheme.error,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    }
+                }
+            }
+        }
+
+        // Instant Wikipedia / Dictionary Result Card
+        AnimatedVisibility(visible = freeRefResult != null) {
+            freeRefResult?.let { ref ->
+                ElevatedCard(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 6.dp)
+                        .testTag("free_reference_result_card"),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = ref.sourceName,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = ref.title,
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                if (ref.subtitle.isNotBlank()) {
+                                    Text(
+                                        text = ref.subtitle,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            IconButton(
+                                onClick = onDismissReference,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(Icons.Rounded.Close, contentDescription = "Close reference result")
+                            }
+                        }
+                        Text(
+                            text = ref.summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 6,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Button(
+                            onClick = { onAskTutorAboutReference(ref) },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .heightIn(min = 48.dp)
+                                .testTag("ask_tutor_from_reference_button")
+                        ) {
+                            Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Turn into Exam Notes & Practice Q")
+                        }
+                    }
                 }
             }
         }

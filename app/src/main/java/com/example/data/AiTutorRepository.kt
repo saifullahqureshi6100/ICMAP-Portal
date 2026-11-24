@@ -23,6 +23,12 @@ data class GeneratedPlanTask(
     val targetMinutes: Long
 )
 
+data class GeneratedFlashcard(
+    val front: String,
+    val back: String,
+    val hint: String
+)
+
 class AiTutorRepository {
 
     private val tutorSystemInstruction = content {
@@ -107,6 +113,31 @@ class AiTutorRepository {
         )
     }
 
+    private val flashcardSchema = Schema.obj(
+        properties = mapOf(
+            "cards" to Schema.array(
+                items = Schema.obj(
+                    properties = mapOf(
+                        "front" to Schema.string("Clear active-recall prompt, term, or exam question under 220 characters."),
+                        "back" to Schema.string("Concise, high-yield answer, definition, or numbered key points under 600 characters."),
+                        "hint" to Schema.string("Optional short memory cue without giving away the full answer.")
+                    )
+                ),
+                description = "List of active-recall flashcards derived from the study material."
+            )
+        )
+    )
+
+    private val flashcardModel by lazy {
+        Firebase.ai.generativeModel(
+            modelName = "gemini-3.8-flash",
+            generationConfig = generationConfig {
+                responseMimeType = "application/json"
+                responseSchema = flashcardSchema
+            }
+        )
+    }
+
     fun streamTutorResponse(
         prompt: String,
         history: List<Content>,
@@ -144,6 +175,91 @@ class AiTutorRepository {
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "AI Tutor streaming failed", e)
+            throw e
+        }
+    }
+
+    fun streamSelectionTutorAction(
+        action: ReaderAiAction,
+        materialTitle: String,
+        materialCategory: String,
+        selectedText: String,
+        pageLabel: String? = null,
+        pageBitmap: Bitmap? = null
+    ): Flow<String> = flow {
+        val clippedSelection = selectedText.trim().take(4500)
+        val sourceLabel = if (pageLabel != null) {
+            "Study Material: \"$materialTitle\" ($materialCategory) — $pageLabel"
+        } else {
+            "Study Material: \"$materialTitle\" ($materialCategory)"
+        }
+        val prompt = when (action) {
+            ReaderAiAction.SUMMARIZE_BULLETS -> buildString {
+                appendLine(sourceLabel)
+                if (clippedSelection.isNotBlank()) {
+                    appendLine("Selected passage:")
+                    appendLine("\"\"\"")
+                    appendLine(clippedSelection)
+                    appendLine("\"\"\"")
+                } else {
+                    appendLine("Analyze the attached study material page image carefully.")
+                }
+                appendLine()
+                appendLine("Task: Convert this content into crisp, high-yield summarized bullet-point study notes.")
+                appendLine("Format clearly with:")
+                appendLine("- **Core Idea** (1 sentence)")
+                appendLine("- **Key Bullet Notes** (4 to 7 concise, exam-ready bullets capturing definitions, steps, or frameworks)")
+                appendLine("- **Key Terms / Formulas** (if any appear)")
+                appendLine("- **Quick Memory Hook** (1 short takeaway for exams)")
+            }
+            ReaderAiAction.EXPLAIN_CONCEPT -> buildString {
+                appendLine(sourceLabel)
+                if (clippedSelection.isNotBlank()) {
+                    appendLine("Selected concept or passage:")
+                    appendLine("\"\"\"")
+                    appendLine(clippedSelection)
+                    appendLine("\"\"\"")
+                } else {
+                    appendLine("Analyze the complex concept shown on the attached study material page image.")
+                }
+                appendLine()
+                appendLine("Task: Explain the complex concept(s) in this selection clearly so a student grasps it immediately.")
+                appendLine("Structure your explanation with:")
+                appendLine("- **Plain-English Meaning** (intuitive 2-sentence explanation)")
+                appendLine("- **Step-by-Step Breakdown** (bullet points unpacking jargon, relationships, or mechanisms)")
+                appendLine("- **Real-World Example** (concrete practical illustration)")
+                appendLine("- **Exam Watch-Out** (common misconception or distinction examiners test)")
+            }
+        }
+
+        val requestContent = content("user") {
+            if (pageBitmap != null) {
+                image(pageBitmap)
+            }
+            text(prompt)
+        }
+
+        val accumulated = StringBuilder()
+        try {
+            withTimeout(60_000L) {
+                tutorModel.generateContentStream(requestContent).collect { chunk ->
+                    val piece = chunk.text.orEmpty()
+                    if (piece.isNotEmpty()) {
+                        accumulated.append(piece)
+                        emit(accumulated.toString())
+                    }
+                }
+            }
+            if (accumulated.isBlank()) {
+                throw IllegalStateException("AI Tutor returned an empty response.")
+            }
+        } catch (e: TimeoutCancellationException) {
+            Log.e(TAG, "Selection AI stream timed out", e)
+            throw IllegalStateException("AI Tutor request timed out after 60 seconds. Please try again.")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Selection AI streaming failed", e)
             throw e
         }
     }
@@ -253,6 +369,61 @@ class AiTutorRepository {
             throw e
         } catch (e: Exception) {
             Log.e(TAG, "Study plan generation failed", e)
+            throw e
+        }
+    }
+
+    suspend fun generateFlashcards(
+        deckTitle: String,
+        sourceContent: String,
+        cardCount: Int
+    ): List<GeneratedFlashcard> {
+        val safeCount = cardCount.coerceIn(3, 15)
+        val prompt = buildString {
+            appendLine("Create $safeCount crisp, high-retention active-recall flashcards.")
+            appendLine("Deck / Reading Material: $deckTitle")
+            if (sourceContent.isNotBlank()) {
+                appendLine("Ground the flashcards directly in this reading material context:")
+                appendLine(sourceContent.take(7000))
+            }
+            appendLine("Keep each front prompt concise and testable, each back answer structured and accurate, and provide a short helpful hint.")
+        }
+
+        try {
+            val response = withTimeout(60_000L) {
+                flashcardModel.generateContent(prompt)
+            }
+            val jsonText = response.text
+                ?: throw IllegalStateException("Flashcard generator returned an empty response.")
+            val root = JSONObject(jsonText)
+            val arr = root.getJSONArray("cards")
+            val cards = mutableListOf<GeneratedFlashcard>()
+            for (i in 0 until arr.length()) {
+                val obj = arr.getJSONObject(i)
+                val front = obj.optString("front", "").trim().take(500)
+                val back = obj.optString("back", "").trim().take(1500)
+                val hint = obj.optString("hint", "").trim().take(300)
+                if (front.isNotEmpty() && back.isNotEmpty()) {
+                    cards.add(
+                        GeneratedFlashcard(
+                            front = front,
+                            back = back,
+                            hint = hint
+                        )
+                    )
+                }
+            }
+            if (cards.isEmpty()) {
+                throw IllegalStateException("No valid flashcards could be parsed from the AI response.")
+            }
+            return cards
+        } catch (e: TimeoutCancellationException) {
+            Log.e(TAG, "Flashcard generation timed out", e)
+            throw IllegalStateException("Flashcard generation timed out after 60 seconds. Try fewer cards.")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(TAG, "Flashcard generation failed", e)
             throw e
         }
     }

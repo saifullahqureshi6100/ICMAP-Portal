@@ -35,6 +35,7 @@ import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Quiz
 import androidx.compose.material.icons.rounded.RadioButtonUnchecked
 import androidx.compose.material.icons.rounded.Schedule
+import androidx.compose.material.icons.rounded.Style
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -109,7 +110,9 @@ fun DashboardScreen(
     onLaunchFullScreenMaterial: (StudyMaterial, Boolean) -> Unit,
     onToggleMaterialComplete: (String, Boolean, Long) -> Unit,
     onLaunchMcqBank: (McqBank) -> Unit,
+    onLaunchFullScreenRoadmap: () -> Unit,
     onLaunchFullScreenMcq: () -> Unit,
+    onLaunchFullScreenFlashcards: () -> Unit,
     onLaunchFullScreenTutor: () -> Unit
 ) {
     var showEditGoalDialog by remember { mutableStateOf(false) }
@@ -264,7 +267,9 @@ fun DashboardScreen(
                 onOpenMaterial = onLaunchFullScreenMaterial,
                 onToggleMaterialComplete = onToggleMaterialComplete,
                 onLaunchMcqBank = onLaunchMcqBank,
-                onTogglePlanItem = onTogglePlanItem
+                onTogglePlanItem = onTogglePlanItem,
+                isFullScreen = false,
+                onToggleFullScreen = onLaunchFullScreenRoadmap
             )
         }
 
@@ -321,6 +326,17 @@ fun DashboardScreen(
                             contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
                             tag = "quick_fullscreen_mcq",
                             onClick = onLaunchFullScreenMcq
+                        )
+                    }
+                    item {
+                        FullScreenQuickCard(
+                            title = "Flashcards Flip",
+                            subtitle = "Shuffle & active recall deck",
+                            icon = Icons.Rounded.Style,
+                            containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                            tag = "quick_fullscreen_flashcards",
+                            onClick = onLaunchFullScreenFlashcards
                         )
                     }
                     item {

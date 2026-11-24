@@ -77,6 +77,17 @@ service cloud.firestore {
              data.fullScreenUsed is bool;
     }
 
+    function isValidFlashcard(data) {
+      return data.userId is string && data.userId == request.auth.uid &&
+             data.materialId is string && data.materialId.size() <= 128 &&
+             data.deckTitle is string && data.deckTitle.size() >= 1 && data.deckTitle.size() <= 140 &&
+             data.front is string && data.front.size() >= 1 && data.front.size() <= 500 &&
+             data.back is string && data.back.size() >= 1 && data.back.size() <= 1500 &&
+             data.hint is string && data.hint.size() <= 300 &&
+             data.mastered is bool &&
+             data.reviewCount is int && data.reviewCount >= 0 && data.reviewCount <= 100000;
+    }
+
     match /users/{userId} {
       allow get, list: if isOwner(userId) && isValidId(userId);
 
@@ -182,6 +193,29 @@ service cloud.firestore {
 
         allow update: if false;
         allow delete: if isOwner(userId) && isValidId(attemptId);
+      }
+
+      match /flashcards/{flashcardId} {
+        allow list: if isOwner(userId);
+        allow get: if isOwner(userId) && isValidId(flashcardId);
+
+        allow create: if isOwner(userId) &&
+                         isValidId(flashcardId) &&
+                         incoming().keys().hasAll(['userId', 'materialId', 'deckTitle', 'front', 'back', 'hint', 'mastered', 'reviewCount', 'createdAt', 'updatedAt']) &&
+                         incoming().keys().hasOnly(['userId', 'materialId', 'deckTitle', 'front', 'back', 'hint', 'mastered', 'reviewCount', 'createdAt', 'updatedAt']) &&
+                         isValidTimestamp(incoming().createdAt) &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         isValidFlashcard(incoming());
+
+        allow update: if isOwner(userId) &&
+                         isValidId(flashcardId) &&
+                         isValidFlashcard(incoming()) &&
+                         incoming().userId == existing().userId &&
+                         incoming().createdAt == existing().createdAt &&
+                         isValidTimestamp(incoming().updatedAt) &&
+                         incoming().diff(existing()).affectedKeys().hasOnly(['mastered', 'reviewCount', 'updatedAt']);
+
+        allow delete: if isOwner(userId) && isValidId(flashcardId);
       }
     }
   }

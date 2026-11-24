@@ -20,7 +20,9 @@ import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.FolderCopy
+import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.Quiz
+import androidx.compose.material.icons.rounded.Style
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -61,12 +63,16 @@ import com.example.auth.signOutUser
 import com.example.data.AiTutorRepository
 import com.example.data.FullScreenMode
 import com.example.data.PortalTab
+import com.example.data.PreloadedMaterials
 import com.example.data.StudyRepository
 import com.example.data.configureAppCheck
 import com.example.ui.screens.DashboardScreen
+import com.example.ui.screens.FlashcardsScreen
+import com.example.ui.screens.FullScreenFlashcardScreen
 import com.example.ui.screens.FullScreenMcqExam
 import com.example.ui.screens.FullScreenPomodoroScreen
 import com.example.ui.screens.FullScreenReadingViewer
+import com.example.ui.screens.FullScreenRoadmapScreen
 import com.example.ui.screens.FullScreenTutorStudio
 import com.example.ui.screens.MaterialsScreen
 import com.example.ui.screens.McqScreen
@@ -78,6 +84,7 @@ import com.google.firebase.Firebase
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.auth
 import com.google.firebase.firestore.FirebaseFirestore
+import kotlinx.coroutines.delay
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -166,10 +173,17 @@ fun StudyPortalShell(
     val quizAttemptsState by viewModel.quizAttemptsState.collectAsStateWithLifecycle()
     val planGenState by viewModel.planGenState.collectAsStateWithLifecycle()
     val mcqGenState by viewModel.mcqGenState.collectAsStateWithLifecycle()
-    val generatedMcqs by viewModel.generatedMcqs.collectAsStateWithLifecycle()
+    val quizSession by viewModel.quizSession.collectAsStateWithLifecycle()
     val tutorMessages by viewModel.tutorMessages.collectAsStateWithLifecycle()
     val tutorStreamingText by viewModel.tutorStreamingText.collectAsStateWithLifecycle()
     val tutorState by viewModel.tutorState.collectAsStateWithLifecycle()
+    val tutorEngineMode by viewModel.tutorEngineMode.collectAsStateWithLifecycle()
+    val freeRefState by viewModel.freeRefState.collectAsStateWithLifecycle()
+    val freeRefResult by viewModel.freeRefResult.collectAsStateWithLifecycle()
+    val readerAiState by viewModel.readerAiState.collectAsStateWithLifecycle()
+    val flashcards by viewModel.flashcardsState.collectAsStateWithLifecycle()
+    val selectedDeckFilter by viewModel.selectedDeckFilter.collectAsStateWithLifecycle()
+    val flashcardGenState by viewModel.flashcardGenState.collectAsStateWithLifecycle()
     val pomodoroState by viewModel.pomodoroState.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
@@ -178,6 +192,15 @@ fun StudyPortalShell(
         feedbackMessage?.let { msg ->
             snackbarHostState.showSnackbar(msg)
             viewModel.clearFeedback()
+        }
+    }
+
+    val isQuizVisible = (activeTab == PortalTab.MCQS && fullScreenMode == null) ||
+        fullScreenMode is FullScreenMode.McqExam
+    LaunchedEffect(isQuizVisible, quizSession.isSubmitted, quizSession.questions.size) {
+        while (isQuizVisible && !quizSession.isSubmitted && quizSession.questions.isNotEmpty()) {
+            delay(1000L)
+            viewModel.tickQuizElapsed()
         }
     }
 
@@ -190,6 +213,21 @@ fun StudyPortalShell(
                     material = activeFullScreen.material,
                     openAsVideo = activeFullScreen.openAsVideo,
                     progress = progressMap[activeFullScreen.material.id],
+                    readerAiState = readerAiState,
+                    onRunReaderAiAction = { action, selectedText, pageLabel, pageBitmap ->
+                        viewModel.runReaderAiAction(
+                            material = activeFullScreen.material,
+                            action = action,
+                            selectedText = selectedText,
+                            pageLabel = pageLabel,
+                            pageBitmap = pageBitmap
+                        )
+                    },
+                    onSwitchReaderAiAction = { action -> viewModel.switchReaderAiAction(action) },
+                    onRetryReaderAi = { viewModel.retryReaderAiAction() },
+                    onSaveReaderAiToNotes = { viewModel.saveReaderAiToNotes() },
+                    onContinueReaderAiInTutor = { viewModel.continueReaderAiInTutor() },
+                    onDismissReaderAi = { viewModel.dismissReaderAiSheet() },
                     onToggleComplete = { completed, mins ->
                         viewModel.toggleMaterialCompleted(activeFullScreen.material.id, completed, mins)
                     },
@@ -199,22 +237,24 @@ fun StudyPortalShell(
                     onAskTutor = { mat ->
                         viewModel.launchTutorForMaterial(mat)
                     },
+                    onGenerateFlashcards = { mat ->
+                        viewModel.generateFlashcardsFromMaterial(
+                            material = mat,
+                            cardCount = 6,
+                            launchFullScreen = true
+                        )
+                    },
+                    isGeneratingFlashcards = flashcardGenState is com.example.viewmodel.AiTaskState.Loading,
                     onExit = { viewModel.exitFullScreen() }
                 )
             }
             is FullScreenMode.McqExam -> {
                 FullScreenMcqExam(
-                    topic = activeFullScreen.topic,
-                    questions = activeFullScreen.questions,
-                    onSubmitScore = { total, correct, durationSec ->
-                        viewModel.submitQuizAttempt(
-                            topic = activeFullScreen.topic,
-                            totalQuestions = total,
-                            correctCount = correct,
-                            durationSeconds = durationSec,
-                            fullScreenUsed = true
-                        )
-                    },
+                    session = quizSession,
+                    onSelectOption = { qIdx, optIdx -> viewModel.selectQuizOption(qIdx, optIdx) },
+                    onSelectQuestionIndex = { idx -> viewModel.setQuizQuestionIndex(idx) },
+                    onResetQuiz = { viewModel.resetCurrentQuiz() },
+                    onSubmitQuiz = { viewModel.submitCurrentQuiz(fullScreenUsed = true) },
                     onExit = { viewModel.exitFullScreen() }
                 )
             }
@@ -223,6 +263,14 @@ fun StudyPortalShell(
                     messages = tutorMessages,
                     streamingText = tutorStreamingText,
                     tutorState = tutorState,
+                    engineMode = tutorEngineMode,
+                    freeRefState = freeRefState,
+                    freeRefResult = freeRefResult,
+                    onSelectEngine = { mode -> viewModel.selectTutorEngine(mode) },
+                    onLookupWiki = { query -> viewModel.lookupWikipediaConcept(query) },
+                    onLookupDictionary = { word -> viewModel.lookupDictionaryTerm(word) },
+                    onDismissReference = { viewModel.dismissFreeReference() },
+                    onAskTutorAboutReference = { ref -> viewModel.askTutorAboutReference(ref) },
                     onSendMessage = { text, bmp -> viewModel.sendTutorMessage(text, bmp) },
                     onExit = { viewModel.exitFullScreen() }
                 )
@@ -236,6 +284,35 @@ fun StudyPortalShell(
                     onSelectPhase = { phase -> viewModel.selectPomodoroPhase(phase) },
                     onUpdateConfig = { work, shortBrk, longBrk, cycles, auto ->
                         viewModel.updatePomodoroIntervals(work, shortBrk, longBrk, cycles, auto)
+                    },
+                    onExit = { viewModel.exitFullScreen() }
+                )
+            }
+            is FullScreenMode.RoadmapFocus -> {
+                val materials = (materialsState as? StreamUiState.Success)?.data ?: PreloadedMaterials.items
+                val progressMap = (progressMapState as? StreamUiState.Success)?.data ?: emptyMap()
+                val plansList = (studyPlansState as? StreamUiState.Success)?.data ?: emptyList()
+                val attemptsList = (quizAttemptsState as? StreamUiState.Success)?.data ?: emptyList()
+                FullScreenRoadmapScreen(
+                    materials = materials,
+                    progressMap = progressMap,
+                    plans = plansList,
+                    attempts = attemptsList,
+                    onOpenMaterial = { mat, asVideo -> viewModel.openMaterialInFullScreen(mat, asVideo) },
+                    onToggleMaterialComplete = { id, done, mins -> viewModel.toggleMaterialCompleted(id, done, mins) },
+                    onLaunchMcqBank = { bank -> viewModel.selectMcqBank(bank, launchFullScreen = true) },
+                    onTogglePlanItem = { id, done -> viewModel.toggleStudyPlanItem(id, done) },
+                    onExit = { viewModel.exitFullScreen() }
+                )
+            }
+            is FullScreenMode.FlashcardDeck -> {
+                FullScreenFlashcardScreen(
+                    flashcards = flashcards,
+                    selectedDeckFilter = selectedDeckFilter,
+                    onSelectDeckFilter = { filter -> viewModel.selectFlashcardDeck(filter) },
+                    onRecordReview = { card, mastered -> viewModel.recordFlashcardReview(card, mastered) },
+                    onAddCustomCard = { deck, matId, front, back, hint ->
+                        viewModel.addCustomFlashcard(deck, matId, front, back, hint)
                     },
                     onExit = { viewModel.exitFullScreen() }
                 )
@@ -267,6 +344,15 @@ fun StudyPortalShell(
                         }
                     },
                     actions = {
+                        IconButton(
+                            onClick = { viewModel.toggleFullScreenForActiveTab() },
+                            modifier = Modifier.testTag("topbar_fullscreen_toggle")
+                        ) {
+                            Icon(
+                                imageVector = Icons.Rounded.Fullscreen,
+                                contentDescription = "Toggle Full-Screen Mode for ${activeTab.label}"
+                            )
+                        }
                         IconButton(
                             onClick = {
                                 signOutUser(credentialManager, scope)
@@ -364,7 +450,11 @@ fun StudyPortalShell(
                                 onLaunchMcqBank = { bank ->
                                     viewModel.selectMcqBank(bank, launchFullScreen = true)
                                 },
+                                onLaunchFullScreenRoadmap = {
+                                    viewModel.enterFullScreen(FullScreenMode.RoadmapFocus)
+                                },
                                 onLaunchFullScreenMcq = { viewModel.startCurrentMcqFullScreen() },
+                                onLaunchFullScreenFlashcards = { viewModel.openFlashcardsFullScreen() },
                                 onLaunchFullScreenTutor = {
                                     viewModel.enterFullScreen(FullScreenMode.TutorStudio())
                                 }
@@ -376,6 +466,14 @@ fun StudyPortalShell(
                                     viewModel.openMaterialInFullScreen(mat, asVideo)
                                 },
                                 onAskTutor = { mat -> viewModel.launchTutorForMaterial(mat) },
+                                onGenerateFlashcards = { mat ->
+                                    viewModel.selectTab(PortalTab.FLASHCARDS)
+                                    viewModel.generateFlashcardsFromMaterial(
+                                        material = mat,
+                                        cardCount = 6,
+                                        launchFullScreen = false
+                                    )
+                                },
                                 onToggleComplete = { id, done, mins ->
                                     viewModel.toggleMaterialCompleted(id, done, mins)
                                 },
@@ -384,9 +482,25 @@ fun StudyPortalShell(
                                 },
                                 onDeleteCustomMaterial = { id -> viewModel.deleteCustomMaterial(id) }
                             )
+                            PortalTab.FLASHCARDS -> FlashcardsScreen(
+                                flashcards = flashcards,
+                                selectedDeckFilter = selectedDeckFilter,
+                                materialsState = materialsState,
+                                flashcardGenState = flashcardGenState,
+                                onSelectDeckFilter = { filter -> viewModel.selectFlashcardDeck(filter) },
+                                onRecordReview = { card, mastered -> viewModel.recordFlashcardReview(card, mastered) },
+                                onDeleteCard = { card -> viewModel.deleteFlashcard(card) },
+                                onGenerateFromMaterial = { mat, excerpt, count, fs ->
+                                    viewModel.generateFlashcardsFromMaterial(mat, excerpt, count, fs)
+                                },
+                                onAddCustomCard = { deck, matId, front, back, hint ->
+                                    viewModel.addCustomFlashcard(deck, matId, front, back, hint)
+                                },
+                                onOpenFullScreen = { viewModel.openFlashcardsFullScreen() }
+                            )
                             PortalTab.MCQS -> McqScreen(
                                 mcqGenState = mcqGenState,
-                                currentQuiz = generatedMcqs,
+                                quizSession = quizSession,
                                 attemptsState = quizAttemptsState,
                                 onSelectMcqBank = { bank, fs ->
                                     viewModel.selectMcqBank(bank, fs)
@@ -394,16 +508,28 @@ fun StudyPortalShell(
                                 onGenerateAndStartFullScreen = { topic, notes, count, fs ->
                                     viewModel.generateAndStartMcqQuiz(topic, notes, count, fs)
                                 },
-                                onStartCurrentFullScreen = { viewModel.startCurrentMcqFullScreen() }
+                                onStartCurrentFullScreen = { viewModel.startCurrentMcqFullScreen() },
+                                onSelectOption = { qIdx, optIdx -> viewModel.selectQuizOption(qIdx, optIdx) },
+                                onSelectQuestionIndex = { idx -> viewModel.setQuizQuestionIndex(idx) },
+                                onResetQuiz = { viewModel.resetCurrentQuiz() },
+                                onSubmitQuiz = { viewModel.submitCurrentQuiz(fullScreenUsed = false) }
                             )
                             PortalTab.TUTOR -> TutorScreen(
                                 messages = tutorMessages,
                                 streamingText = tutorStreamingText,
                                 tutorState = tutorState,
+                                engineMode = tutorEngineMode,
+                                freeRefState = freeRefState,
+                                freeRefResult = freeRefResult,
                                 isFullScreen = false,
                                 onToggleFullScreen = {
                                     viewModel.enterFullScreen(FullScreenMode.TutorStudio())
                                 },
+                                onSelectEngine = { mode -> viewModel.selectTutorEngine(mode) },
+                                onLookupWiki = { query -> viewModel.lookupWikipediaConcept(query) },
+                                onLookupDictionary = { word -> viewModel.lookupDictionaryTerm(word) },
+                                onDismissReference = { viewModel.dismissFreeReference() },
+                                onAskTutorAboutReference = { ref -> viewModel.askTutorAboutReference(ref) },
                                 onSendMessage = { text, bmp -> viewModel.sendTutorMessage(text, bmp) }
                             )
                         }
@@ -417,6 +543,7 @@ fun StudyPortalShell(
 private fun tabIcon(tab: PortalTab) = when (tab) {
     PortalTab.DASHBOARD -> Icons.Rounded.Dashboard
     PortalTab.MATERIALS -> Icons.Rounded.FolderCopy
+    PortalTab.FLASHCARDS -> Icons.Rounded.Style
     PortalTab.MCQS -> Icons.Rounded.Quiz
     PortalTab.TUTOR -> Icons.Rounded.AutoAwesome
 }

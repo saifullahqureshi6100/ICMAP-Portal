@@ -119,6 +119,21 @@ data class McqQuestion(
     val explanation: String
 )
 
+data class QuizSessionState(
+    val topic: String = "",
+    val questions: List<McqQuestion> = emptyList(),
+    val currentIndex: Int = 0,
+    val selectedAnswers: Map<Int, Int> = emptyMap(),
+    val isSubmitted: Boolean = false,
+    val elapsedSeconds: Int = 0
+) {
+    val correctCount: Int
+        get() = questions.indices.count { idx -> selectedAnswers[idx] == questions[idx].correctIndex }
+
+    val accuracyPercent: Int
+        get() = if (questions.isNotEmpty()) (correctCount * 100) / questions.size else 0
+}
+
 data class TutorMessage(
     val id: String,
     val isUser: Boolean,
@@ -126,9 +141,45 @@ data class TutorMessage(
     val hasAttachment: Boolean = false
 )
 
+enum class TutorEngineMode(val label: String, val subtitle: String) {
+    GEMINI_BUILTIN(
+        label = "Built-in Gemini",
+        subtitle = "$0 Primary • Multimodal + Streaming"
+    ),
+    POLLINATIONS_FREE(
+        label = "Pollinations Free",
+        subtitle = "$0 Open Text API • Zero Key"
+    )
+}
+
+data class FreeReferenceResult(
+    val sourceName: String,
+    val title: String,
+    val subtitle: String,
+    val summary: String,
+    val sourceUrl: String
+)
+
+@Keep
+@IgnoreExtraProperties
+data class Flashcard(
+    @DocumentId val id: String = "",
+    val userId: String = "",
+    val materialId: String = "",
+    val deckTitle: String = "",
+    val front: String = "",
+    val back: String = "",
+    val hint: String = "",
+    val mastered: Boolean = false,
+    val reviewCount: Long = 0L,
+    @ServerTimestamp val createdAt: Timestamp? = null,
+    @ServerTimestamp val updatedAt: Timestamp? = null
+)
+
 enum class PortalTab(val label: String) {
-    DASHBOARD("Dashboard"),
+    DASHBOARD("Home"),
     MATERIALS("Materials"),
+    FLASHCARDS("Cards"),
     MCQS("MCQs"),
     TUTOR("AI Tutor")
 }
@@ -164,6 +215,26 @@ data class PomodoroState(
         }
 }
 
+enum class ReaderAiAction(val label: String, val shortLabel: String) {
+    SUMMARIZE_BULLETS("Summarized Bullet-Point Notes", "Bullet Notes"),
+    EXPLAIN_CONCEPT("Complex Concept Explanation", "Explain Concept")
+}
+
+data class ReaderAiSessionState(
+    val isVisible: Boolean = false,
+    val action: ReaderAiAction = ReaderAiAction.SUMMARIZE_BULLETS,
+    val materialId: String = "",
+    val materialTitle: String = "",
+    val materialCategory: String = "",
+    val selectedSnippet: String = "",
+    val pageLabel: String? = null,
+    val hasPageImage: Boolean = false,
+    val responseText: String = "",
+    val isLoading: Boolean = false,
+    val errorMessage: String? = null,
+    val savedToNotes: Boolean = false
+)
+
 sealed interface FullScreenMode {
     data class ReadingViewer(
         val material: StudyMaterial,
@@ -180,6 +251,12 @@ sealed interface FullScreenMode {
     ) : FullScreenMode
 
     data object PomodoroFocus : FullScreenMode
+
+    data object RoadmapFocus : FullScreenMode
+
+    data class FlashcardDeck(
+        val initialDeckFilter: String? = null
+    ) : FullScreenMode
 }
 
 object DriveUrlParser {
@@ -813,4 +890,76 @@ object OmMcqBanks {
         )
     )
 }
+
+object PreloadedFlashcards {
+    const val STARTER_DECK_TITLE = "ICMA M3 OM Starter Deck"
+
+    val cards: List<Flashcard> = listOf(
+        Flashcard(
+            id = "starter_fc_1",
+            materialId = "om_study_text_2026",
+            deckTitle = STARTER_DECK_TITLE,
+            front = "What are Mintzberg's 5 Organizational Parts?",
+            back = "1. Strategic Apex (top executives)\n2. Middle Line (managerial hierarchy)\n3. Operating Core (frontline producers/service staff)\n4. Technostructure (analysts standardizing work/outputs)\n5. Support Staff (indirect services like legal, HR, catering).",
+            hint = "Apex, Middle, Core, plus two outside advisory/support wings."
+        ),
+        Flashcard(
+            id = "starter_fc_2",
+            materialId = "om_study_text_2026",
+            deckTitle = STARTER_DECK_TITLE,
+            front = "How is Overall Equipment Effectiveness (OEE) calculated in TPM?",
+            back = "OEE = Availability × Performance × Quality\nIt captures losses from equipment breakdowns/setups, slow cycle speeds, and defective output.",
+            hint = "Multiply three operational ratios."
+        ),
+        Flashcard(
+            id = "starter_fc_3",
+            materialId = "om_study_text_2026",
+            deckTitle = STARTER_DECK_TITLE,
+            front = "Explain OPT's Drum-Buffer-Rope scheduling mechanism.",
+            back = "• Drum: The bottleneck constraint that sets the factory production pace.\n• Buffer: Time/inventory buffer placed right before the bottleneck to keep it fed.\n• Rope: Communication schedule linking material release to the bottleneck's consumption rate.",
+            hint = "Theory of Constraints scheduling anchored around the bottleneck."
+        ),
+        Flashcard(
+            id = "starter_fc_4",
+            materialId = "om_study_text_2026",
+            deckTitle = STARTER_DECK_TITLE,
+            front = "What are Juran's 4 Cost of Quality (COQ) categories?",
+            back = "1. Prevention Costs (training, quality planning)\n2. Appraisal Costs (inspection, testing, audits)\n3. Internal Failure Costs (scrap, rework before delivery)\n4. External Failure Costs (warranty claims, recalls after delivery).",
+            hint = "Two conformance costs + two failure costs."
+        ),
+        Flashcard(
+            id = "starter_fc_5",
+            materialId = "om_study_text_2026",
+            deckTitle = STARTER_DECK_TITLE,
+            front = "What are the 3 leaves of Charles Handy's Shamrock Organization?",
+            back = "1. Professional Core (essential qualified full-time managers & specialists)\n2. Contractual Fringe (non-core work outsourced to specialist firms)\n3. Flexible Labor Force (part-time, temporary & seasonal workers).",
+            hint = "Core + Outsourced + Flexible."
+        ),
+        Flashcard(
+            id = "starter_fc_6",
+            materialId = "om_past_papers_ml1",
+            deckTitle = STARTER_DECK_TITLE,
+            front = "List 4 common judgment errors in selection interviews (OM Past Paper Q.8).",
+            back = "1. Halo Effect (one standout trait colors total judgment)\n2. Contagious Bias (giving leading cues from earlier candidates)\n3. Stereotyping (judging by accent, dress, or voice)\n4. Logical Error / misjudging abstract traits like honesty.",
+            hint = "Halo, Contagious, Stereotyping, Logical."
+        ),
+        Flashcard(
+            id = "starter_fc_7",
+            materialId = "om_past_papers_ml1",
+            deckTitle = STARTER_DECK_TITLE,
+            front = "What are the 4 perspectives in Kaplan & Norton's Balanced Scorecard?",
+            back = "1. Financial (shareholder value & profitability)\n2. Customer (satisfaction, retention, market share)\n3. Internal Business Processes (cycle time, quality, innovation)\n4. Learning & Growth (skills, IT systems, culture).",
+            hint = "Balances financial lagging results with 3 leading perspectives."
+        ),
+        Flashcard(
+            id = "starter_fc_8",
+            materialId = "om_study_text_2026",
+            deckTitle = STARTER_DECK_TITLE,
+            front = "What are the 3 pillars of Fitzgerald & Moon's Building Block Model?",
+            back = "1. Dimensions (2 results: financial & competitiveness; 4 determinants: quality, flexibility, resource utilization, innovation)\n2. Standards (ownership, achievability, equity)\n3. Rewards (clarity, motivation, controllability).",
+            hint = "Designed specifically for service-sector performance."
+        )
+    )
+}
+
 
