@@ -10,8 +10,10 @@ import {
   Volume2
 } from 'lucide-react';
 import { buildTestPaper } from '../data/strategistEngine';
+import { mapTopicToPortionCode } from '../data/portionAnalytics';
 import {
   McqQuestionItem,
+  OmPortionCode,
   TestAttemptSummary,
   TestModeKind,
   TutorLang,
@@ -22,6 +24,7 @@ interface DailyTestsArenaProps {
   weakTopics: string[];
   recentAttempts: TestAttemptSummary[];
   initialMode?: TestModeKind;
+  initialPortionFilter?: string;
   lang: TutorLang;
   isFullScreen: boolean;
   onToggleFullScreen: () => void;
@@ -38,6 +41,7 @@ export const DailyTestsArena: React.FC<DailyTestsArenaProps> = ({
   weakTopics,
   recentAttempts,
   initialMode = 'daily_test',
+  initialPortionFilter = 'part_a_ops',
   lang,
   isFullScreen,
   onToggleFullScreen,
@@ -47,15 +51,15 @@ export const DailyTestsArena: React.FC<DailyTestsArenaProps> = ({
   onTestCompleted
 }) => {
   const [mode, setMode] = useState<TestModeKind>(initialMode);
-  const [portionFilter, setPortionFilter] = useState<string>('part_a_ops');
+  const [portionFilter, setPortionFilter] = useState<string>(initialPortionFilter);
   const [paperTitle, setPaperTitle] = useState<string>(() =>
-    buildTestPaper(initialMode, weakTopics).title
+    buildTestPaper(initialMode, weakTopics, initialPortionFilter).title
   );
   const [mcqs, setMcqs] = useState<McqQuestionItem[]>(() =>
-    buildTestPaper(initialMode, weakTopics).mcqs
+    buildTestPaper(initialMode, weakTopics, initialPortionFilter).mcqs
   );
   const [typingQs, setTypingQs] = useState<TypingQuestionItem[]>(() =>
-    buildTestPaper(initialMode, weakTopics).typing
+    buildTestPaper(initialMode, weakTopics, initialPortionFilter).typing
   );
 
   const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
@@ -125,14 +129,23 @@ export const DailyTestsArena: React.FC<DailyTestsArenaProps> = ({
 
   function submitTestAndDetectWeak() {
     setSubmitted(true);
-    // Calculate accuracy per topicTag (< 70% triggers adaptive plan update)
+    // Calculate accuracy per topicTag (< 70% triggers adaptive plan update) and per Syllabus Portion
     const stats = new Map<string, { right: number; total: number }>();
+    const portionScores: Partial<Record<OmPortionCode, { right: number; total: number }>> = {};
+
     mcqs.forEach((q, idx) => {
+      const isCorrect = selectedAnswers[idx] === q.answer;
       const tag = q.topicTag || 'General OM';
       const cur = stats.get(tag) || { right: 0, total: 0 };
       cur.total += 1;
-      if (selectedAnswers[idx] === q.answer) cur.right += 1;
+      if (isCorrect) cur.right += 1;
       stats.set(tag, cur);
+
+      const pCode = mapTopicToPortionCode(q.bankId || q.topicTag || '');
+      const pCur = portionScores[pCode] || { right: 0, total: 0 };
+      pCur.total += 1;
+      if (isCorrect) pCur.right += 1;
+      portionScores[pCode] = pCur;
     });
 
     const detectedWeak: string[] = [];
@@ -151,6 +164,7 @@ export const DailyTestsArena: React.FC<DailyTestsArenaProps> = ({
       typingCompleted: typingCompletedCount,
       typingTotal: typingQs.length,
       weakTopicsDetected: detectedWeak,
+      portionScores,
       timestamp: Date.now()
     });
   }

@@ -113,6 +113,27 @@ export interface DailyBriefPlan {
   slots: DailyRoutineSlot[];
 }
 
+export type OmPortionCode = 'OM-A' | 'OM-B' | 'OM-C' | 'OM-D';
+
+export interface OmPortionStat {
+  code: OmPortionCode;
+  partLabel: string;
+  title: string;
+  units: string;
+  weightPercent: number;
+  isHighYield: boolean;
+  new2025Highlight: string;
+  topics: string[];
+  linkedBankFilter: 'part_a_ops' | 'part_b_hrm' | 'part_c_mkt' | 'part_d_epm';
+  linkedChapterPage: number;
+  conceptsPct: number;
+  planPct: number;
+  testMarksPct: number | null;
+  testAttemptsCount: number;
+  overallPrepPct: number;
+  projectedMarks: number;
+}
+
 export interface TestAttemptSummary {
   id: string;
   kind: TestModeKind;
@@ -122,6 +143,7 @@ export interface TestAttemptSummary {
   typingCompleted: number;
   typingTotal: number;
   weakTopicsDetected: string[];
+  portionScores?: Partial<Record<OmPortionCode, { right: number; total: number }>>;
   timestamp: number;
 }
 

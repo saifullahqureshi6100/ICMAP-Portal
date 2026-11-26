@@ -6,6 +6,13 @@
   color: #e8f2ff;
   background: #050b14;
   font-synthesis: none;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color: #090f1d;
+  background: #f1f5f9;
+  color-scheme: light;
 }
 
 * {
@@ -14,6 +21,11 @@
 
 html {
   background: #050b14;
+  transition: background-color 200ms ease, color 200ms ease;
+}
+
+html[data-theme="light"] {
+  background: #f1f5f9;
 }
 
 body {
@@ -22,6 +34,12 @@ body {
   min-height: 100vh;
   background: radial-gradient(circle at 15% 0%, #12304c 0, #07111f 35%, #050b14 75%);
   overflow-x: hidden;
+  transition: background 220ms ease, color 200ms ease;
+}
+
+html[data-theme="light"] body {
+  background: radial-gradient(circle at 15% 0%, #e0edff 0, #f4f7fb 40%, #eef2f7 100%);
+  color: #090f1d;
 }
 
 button,
@@ -47,8 +65,21 @@ button:disabled {
   backdrop-filter: blur(14px);
 }
 
+html[data-theme="light"] .glass {
+  background: rgba(255, 255, 255, 0.96);
+  border: 1.5px solid #cbd5e1;
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.08);
+}
+
 .gradientText {
   background: linear-gradient(90deg, #67e8f9, #a78bfa, #f0abfc);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+html[data-theme="light"] .gradientText {
+  background: linear-gradient(90deg, #0369a1, #4338ca, #7e22ce);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -61,12 +92,89 @@ button:disabled {
   overflow: hidden;
 }
 
+html[data-theme="light"] .progress {
+  background: #dbe4f0;
+}
+
 .progress > span {
   display: block;
   height: 100%;
   background: linear-gradient(90deg, #22d3ee, #8b5cf6);
   border-radius: 999px;
   transition: width 280ms ease;
+}
+
+html[data-theme="light"] .progress > span {
+  background: linear-gradient(90deg, #0284c7, #4f46e5);
+}
+
+/* High-contrast light theme overrides across utility classes */
+html[data-theme="light"] .text-white {
+  color: #090f1d !important;
+}
+html[data-theme="light"] button.bg-gradient-to-r,
+html[data-theme="light"] .bg-gradient-to-br.from-cyan-400.to-violet-500 {
+  color: #ffffff !important;
+}
+html[data-theme="light"] .text-slate-100,
+html[data-theme="light"] .text-slate-200 {
+  color: #0f172a !important;
+}
+html[data-theme="light"] .text-slate-300 {
+  color: #1e293b !important;
+}
+html[data-theme="light"] .text-slate-400,
+html[data-theme="light"] .text-slate-500 {
+  color: #334155 !important;
+}
+html[data-theme="light"] .text-cyan-100,
+html[data-theme="light"] .text-cyan-200,
+html[data-theme="light"] .text-cyan-300 {
+  color: #0369a1 !important;
+}
+html[data-theme="light"] .text-amber-100,
+html[data-theme="light"] .text-amber-200,
+html[data-theme="light"] .text-amber-300 {
+  color: #92400e !important;
+}
+html[data-theme="light"] .text-emerald-100,
+html[data-theme="light"] .text-emerald-200,
+html[data-theme="light"] .text-emerald-300 {
+  color: #065f46 !important;
+}
+html[data-theme="light"] .text-violet-100,
+html[data-theme="light"] .text-violet-200,
+html[data-theme="light"] .text-violet-300 {
+  color: #5b21b6 !important;
+}
+html[data-theme="light"] .text-rose-100,
+html[data-theme="light"] .text-rose-200,
+html[data-theme="light"] .text-rose-300 {
+  color: #be123c !important;
+}
+html[data-theme="light"] .bg-white\/5,
+html[data-theme="light"] .bg-white\/10,
+html[data-theme="light"] .bg-black\/20,
+html[data-theme="light"] .bg-black\/25,
+html[data-theme="light"] .bg-black\/30,
+html[data-theme="light"] .bg-black\/35,
+html[data-theme="light"] .bg-slate-800\/80 {
+  background-color: #eef2f8 !important;
+}
+html[data-theme="light"] .bg-gradient-to-br.from-slate-900\/95 {
+  background-image: linear-gradient(to bottom right, #ffffff, #eef6ff, #f3efff) !important;
+  border-color: #94a3b8 !important;
+}
+html[data-theme="light"] .border-white\/10,
+html[data-theme="light"] .border-white\/15 {
+  border-color: #cbd5e1 !important;
+}
+html[data-theme="light"] input,
+html[data-theme="light"] textarea,
+html[data-theme="light"] select {
+  background-color: #ffffff !important;
+  color: #090f1d !important;
+  border-color: #94a3b8 !important;
 }
 
 .scrollbar::-webkit-scrollbar {
@@ -77,6 +185,10 @@ button:disabled {
 .scrollbar::-webkit-scrollbar-thumb {
   background: #24415d;
   border-radius: 99px;
+}
+
+html[data-theme="light"] .scrollbar::-webkit-scrollbar-thumb {
+  background: #94a3b8;
 }
 
 /* 3D Flashcard Flip */

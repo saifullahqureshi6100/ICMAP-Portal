@@ -3,10 +3,7 @@ import {
   BarChart3,
   BookOpen,
   Brain,
-  CalendarDays,
   CheckCircle2,
-  ChevronRight,
-  Clock,
   Download,
   ExternalLink,
   FileText,
@@ -17,36 +14,32 @@ import {
   Menu,
   Mic,
   Minimize2,
+  Moon,
   Play,
   Search,
   Send,
-  Target,
+  Sun,
   Upload,
   Video,
   Volume2,
   VolumeX,
   X
 } from 'lucide-react';
-import {
-  Bar,
-  BarChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis
-} from 'recharts';
 import { DailyBriefAndCoach } from './components/DailyBriefAndCoach';
 import { DailyTestsArena } from './components/DailyTestsArena';
+import { ExecutiveDashboard } from './components/ExecutiveDashboard';
 import { FlashcardDeck } from './components/FlashcardDeck';
 import { PdfAndReaderView } from './components/PdfAndReaderView';
 import { PomodoroTimer } from './components/PomodoroTimer';
 import { StudyRoadmap } from './components/StudyRoadmap';
 import {
   OM_MCQ_QUESTIONS,
+  ROADMAP_MILESTONES,
   STARTER_FLASHCARDS,
   STUDY_MATERIALS,
   SUBJECTS
 } from './data/icmapData';
+import { computeOmPortionStats } from './data/portionAnalytics';
 import {
   buildDailyBriefPlan,
   selectTodayFiveFlashcards
@@ -109,6 +102,22 @@ export default function App() {
   const [voiceEnabled, setVoiceEnabled] = useState(true);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [engineMode, setEngineMode] = useState<AiEngineMode>('auto_free');
+  const [themeMode, setThemeMode] = useState<'midnight' | 'light'>(() =>
+    loadStored<'midnight' | 'light'>('icmap_theme', 'midnight')
+  );
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = themeMode;
+    saveStored('icmap_theme', themeMode);
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) {
+      meta.setAttribute('content', themeMode === 'light' ? '#f8fafc' : '#07111f');
+    }
+  }, [themeMode]);
+
+  function toggleGlobalTheme() {
+    setThemeMode((prev) => (prev === 'midnight' ? 'light' : 'midnight'));
+  }
 
   // Master Strategist Adaptive State
   const [weakTopics, setWeakTopics] = useState<string[]>(() =>
@@ -124,6 +133,7 @@ export default function App() {
     loadStored('icmap_test_history', [])
   );
   const [preferredTestMode, setPreferredTestMode] = useState<TestModeKind>('daily_test');
+  const [preferredPortionFilter, setPreferredPortionFilter] = useState<string>('part_a_ops');
   const [defaultTodayFiveCards, setDefaultTodayFiveCards] = useState(true);
 
   const dailyPlan = useMemo(
@@ -260,9 +270,21 @@ export default function App() {
     setIsSpeaking(false);
   }
 
+  const portionStats = useMemo(
+    () =>
+      computeOmPortionStats({
+        flashcards,
+        completedMilestones,
+        completedSlotIds,
+        readProgressMap,
+        testHistory
+      }),
+    [flashcards, completedMilestones, completedSlotIds, readProgressMap, testHistory]
+  );
+
   const overall = useMemo(
-    () => Math.round(SUBJECTS.reduce((acc, s) => acc + s.progress, 0) / SUBJECTS.length),
-    []
+    () => Math.round(portionStats.reduce((acc, p) => acc + p.projectedMarks, 0)),
+    [portionStats]
   );
 
   function showToast(msg: string) {
@@ -701,13 +723,25 @@ export default function App() {
                   ? 'Study Roadmap'
                   : navItems.find((n) => n[0] === tab)?.[1] || 'Study Portal'}
             </div>
-            <button
-              type="button"
-              onClick={() => toggleFullScreen()}
-              className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold flex items-center gap-1.5"
-            >
-              <Minimize2 size={15} /> Exit Full Screen
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={toggleGlobalTheme}
+                aria-label={themeMode === 'midnight' ? 'Switch to High-Contrast Light theme' : 'Switch to Midnight theme'}
+                data-testid="fullscreen_theme_toggle"
+                className="px-3 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold flex items-center gap-1.5 min-h-[40px]"
+              >
+                {themeMode === 'midnight' ? <Sun size={15} /> : <Moon size={15} />}
+                {themeMode === 'midnight' ? 'Light' : 'Midnight'}
+              </button>
+              <button
+                type="button"
+                onClick={() => toggleFullScreen()}
+                className="px-3.5 py-2 rounded-xl bg-white/10 hover:bg-white/15 text-xs font-semibold flex items-center gap-1.5"
+              >
+                <Minimize2 size={15} /> Exit Full Screen
+              </button>
+            </div>
           </div>
 
           {fullScreenTarget === 'pomodoro' ? (
@@ -796,6 +830,7 @@ export default function App() {
               weakTopics={weakTopics}
               recentAttempts={testHistory}
               initialMode={preferredTestMode}
+              initialPortionFilter={preferredPortionFilter}
               lang={lang}
               isFullScreen
               onToggleFullScreen={() => toggleFullScreen()}
@@ -1056,6 +1091,34 @@ export default function App() {
           </nav>
 
           <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleGlobalTheme}
+              aria-label={
+                themeMode === 'midnight'
+                  ? 'Switch to High-Contrast Light theme'
+                  : 'Switch to Midnight theme'
+              }
+              title={
+                themeMode === 'midnight'
+                  ? 'Switch to High-Contrast Light Theme'
+                  : 'Switch to Midnight Theme'
+              }
+              data-testid="global_theme_toggle"
+              className="px-3 py-2 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold flex items-center gap-1.5 min-h-[40px]"
+            >
+              {themeMode === 'midnight' ? (
+                <>
+                  <Sun size={15} className="text-amber-300" />
+                  <span className="hidden sm:inline">Light</span>
+                </>
+              ) : (
+                <>
+                  <Moon size={15} className="text-cyan-300" />
+                  <span className="hidden sm:inline">Midnight</span>
+                </>
+              )}
+            </button>
             {!isStandalonePwa && (
               <button
                 type="button"
@@ -1112,27 +1175,36 @@ export default function App() {
           <aside className="hidden xl:block glass rounded-3xl p-4 h-fit sticky top-20 space-y-4">
             <div>
               <div className="text-xs text-cyan-300 uppercase tracking-widest mb-3 font-semibold">
-                Exam Countdown: {dailyPlan.daysToExam}d Left
+                5 Dec Exam: {dailyPlan.daysToExam}d • {overall}/100 Est.
               </div>
-              {SUBJECTS.map((s) => (
-                <button
-                  key={s.code}
-                  type="button"
-                  onClick={() => setSubject(s)}
-                  className={`w-full text-left p-3 rounded-2xl mb-2 transition ${
-                    subject.code === s.code ? 'bg-cyan-400/12 border border-cyan-300/30' : 'hover:bg-white/5'
-                  }`}
-                >
-                  <div className="flex justify-between text-sm font-bold">
-                    <span>{s.code}</span>
-                    <span>{s.progress}%</span>
-                  </div>
-                  <div className="progress mt-2">
-                    <span style={{ width: `${s.progress}%` }} />
-                  </div>
-                  <div className="text-[11px] text-slate-400 mt-1">{s.name}</div>
-                </button>
-              ))}
+              {portionStats.map((p) => {
+                const matchedSubj = SUBJECTS.find((s) => s.code === p.code) || SUBJECTS[0];
+                return (
+                  <button
+                    key={p.code}
+                    type="button"
+                    onClick={() => setSubject(matchedSubj)}
+                    className={`w-full text-left p-3 rounded-2xl mb-2 transition ${
+                      subject.code === p.code
+                        ? 'bg-cyan-400/12 border border-cyan-300/30'
+                        : 'hover:bg-white/5'
+                    }`}
+                  >
+                    <div className="flex justify-between text-xs font-bold">
+                      <span>
+                        {p.partLabel} <span className="text-amber-300">({p.weightPercent}%)</span>
+                      </span>
+                      <span className="text-cyan-200">{p.overallPrepPct}%</span>
+                    </div>
+                    <div className="progress mt-1.5">
+                      <span style={{ width: `${p.overallPrepPct}%` }} />
+                    </div>
+                    <div className="text-[11px] text-slate-400 mt-1">
+                      {p.title} • {p.units}
+                    </div>
+                  </button>
+                );
+              })}
             </div>
 
             <div className="border-t border-white/10 pt-4 text-xs space-y-2">
@@ -1175,7 +1247,33 @@ export default function App() {
           <section className="min-w-0 space-y-5">
             {tab === 'home' && (
               <>
-                {/* 1. MASTER STRATEGIST BRIEF OF THE DAY + URDU VOICE ASK TEACHER */}
+                {/* 1. EXECUTIVE MERIT & OFFICIAL SYLLABUS WEIGHTAGE COMMAND CENTER */}
+                <ExecutiveDashboard
+                  portions={portionStats}
+                  daysToExam={dailyPlan.daysToExam}
+                  weakTopics={weakTopics}
+                  studyMinutesTotal={studyMinutesTotal}
+                  completedMilestonesCount={completedMilestones.length}
+                  totalMilestonesCount={ROADMAP_MILESTONES.length}
+                  testAttemptsCount={testHistory.length}
+                  onPracticePortion={(bankFilter) => {
+                    setPreferredTestMode('portion_grand');
+                    setPreferredPortionFilter(bankFilter);
+                    setTab('tests');
+                  }}
+                  onStudyPortion={(p) => {
+                    const matchedMat = STUDY_MATERIALS[0];
+                    setSelectedMaterial(matchedMat);
+                    setTopic(p.topics[0] || p.title);
+                    setTab('read');
+                  }}
+                  onOpenRepairTopic={(w) => {
+                    setTopic(w);
+                    setTab('read');
+                  }}
+                />
+
+                {/* 2. MASTER STRATEGIST BRIEF OF THE DAY + URDU VOICE ASK TEACHER */}
                 <DailyBriefAndCoach
                   plan={dailyPlan}
                   weakTopics={weakTopics}
@@ -1210,22 +1308,6 @@ export default function App() {
                   coachBusy={busy}
                 />
 
-                {/* 2. Metrics Row */}
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-                  {[
-                    ['Overall Readiness', `${overall}%`, Target],
-                    ['Today Target', `${(dailyPlan.totalStudyMinutes / 60).toFixed(1)}h`, Clock],
-                    ['Milestones Done', `${completedMilestones.length}/5`, CalendarDays],
-                    ['Weak Topics Tracked', String(weakTopics.length), Brain]
-                  ].map(([label, val, IconComp]: any) => (
-                    <div className="glass rounded-2xl p-4" key={label}>
-                      <IconComp size={18} className="text-cyan-300" />
-                      <div className="text-2xl font-bold mt-2">{val}</div>
-                      <div className="text-xs text-slate-400">{label}</div>
-                    </div>
-                  ))}
-                </div>
-
                 {/* 3. Pomodoro Timer + Study Roadmap Side-by-Side */}
                 <div className="grid lg:grid-cols-[360px_1fr] gap-5 items-start">
                   <PomodoroTimer
@@ -1251,45 +1333,6 @@ export default function App() {
                     isFullScreen={false}
                     onToggleFullScreen={() => toggleFullScreen('roadmap')}
                   />
-                </div>
-
-                {/* 4. Analytics + Weak Topics */}
-                <div className="grid lg:grid-cols-2 gap-5">
-                  <div className="glass rounded-3xl p-5">
-                    <h3 className="font-bold">Subject Readiness</h3>
-                    <div className="h-56 mt-4">
-                      <ResponsiveContainer width="100%" height="100%">
-                        <BarChart data={SUBJECTS}>
-                          <XAxis dataKey="code" stroke="#6b8299" />
-                          <YAxis stroke="#6b8299" />
-                          <Tooltip />
-                          <Bar dataKey="progress" fill="#22d3ee" radius={[6, 6, 0, 0]} />
-                        </BarChart>
-                      </ResponsiveContainer>
-                    </div>
-                  </div>
-                  <div className="glass rounded-3xl p-5">
-                    <h3 className="font-bold">Auto-Tracked Priority Weak Topics</h3>
-                    <div className="space-y-2 mt-4">
-                      {weakTopics.slice(0, 6).map((w) => (
-                        <button
-                          key={w}
-                          type="button"
-                          onClick={() => {
-                            setTopic(w);
-                            setTab('read');
-                          }}
-                          className="w-full p-3 rounded-xl bg-white/5 hover:bg-cyan-400/10 text-left flex justify-between items-center text-sm"
-                        >
-                          <span>
-                            <b className="text-rose-300">WEAK</b>{' '}
-                            <span className="text-slate-200">{w}</span>
-                          </span>
-                          <ChevronRight size={16} />
-                        </button>
-                      ))}
-                    </div>
-                  </div>
                 </div>
               </>
             )}
@@ -1357,6 +1400,7 @@ export default function App() {
                 weakTopics={weakTopics}
                 recentAttempts={testHistory}
                 initialMode={preferredTestMode}
+                initialPortionFilter={preferredPortionFilter}
                 lang={lang}
                 isFullScreen={false}
                 onToggleFullScreen={() => toggleFullScreen('active')}

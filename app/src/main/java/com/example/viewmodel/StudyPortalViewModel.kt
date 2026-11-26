@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.data.AiTutorRepository
 import com.example.data.DailyBriefPlan
 import com.example.data.EnergyMode
+import com.example.data.ExecutiveDashboardAnalytics
 import com.example.data.Flashcard
 import com.example.data.FreeExternalApiService
 import com.example.data.FreeReferenceResult
@@ -15,9 +16,11 @@ import com.example.data.MaterialType
 import com.example.data.McqBank
 import com.example.data.McqQuestion
 import com.example.data.OmMcqBanks
+import com.example.data.OmPortionCode
 import com.example.data.PomodoroPhase
 import com.example.data.PomodoroState
 import com.example.data.PortalTab
+import com.example.data.PortionAnalyticsCalculator
 import com.example.data.PreloadedFlashcards
 import com.example.data.PreloadedMaterials
 import com.example.data.QuizAttempt
@@ -283,6 +286,50 @@ class StudyPortalViewModel(
         initialValue = DashboardSummary()
     )
 
+    val executiveAnalytics: StateFlow<ExecutiveDashboardAnalytics> = combine(
+        combine(
+            materialsState,
+            progressMapState,
+            studyPlansState,
+            quizAttemptsState,
+            flashcardsState
+        ) { materialsRes, progressRes, plansRes, attemptsRes, cards ->
+            PortionAnalyticsCalculator.compute(
+                materials = (materialsRes as? StreamUiState.Success)?.data ?: PreloadedMaterials.items,
+                progressMap = (progressRes as? StreamUiState.Success)?.data ?: emptyMap(),
+                plans = (plansRes as? StreamUiState.Success)?.data ?: emptyList(),
+                attempts = (attemptsRes as? StreamUiState.Success)?.data ?: emptyList(),
+                flashcards = cards,
+                completedRoutineIds = _completedRoutineIds.value
+            )
+        },
+        _completedRoutineIds
+    ) { _, routineIds ->
+        val materials = (materialsState.value as? StreamUiState.Success)?.data ?: PreloadedMaterials.items
+        val progress = (progressMapState.value as? StreamUiState.Success)?.data ?: emptyMap()
+        val plans = (studyPlansState.value as? StreamUiState.Success)?.data ?: emptyList()
+        val attempts = (quizAttemptsState.value as? StreamUiState.Success)?.data ?: emptyList()
+        PortionAnalyticsCalculator.compute(
+            materials = materials,
+            progressMap = progress,
+            plans = plans,
+            attempts = attempts,
+            flashcards = flashcardsState.value,
+            completedRoutineIds = routineIds
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+        initialValue = PortionAnalyticsCalculator.compute(
+            materials = PreloadedMaterials.items,
+            progressMap = emptyMap(),
+            plans = emptyList(),
+            attempts = emptyList(),
+            flashcards = PreloadedFlashcards.cards,
+            completedRoutineIds = emptySet()
+        )
+    )
+
     init {
         viewModelScope.launch {
             studyRepo.ensureUserProfile(currentUserId, initialDisplayName)
@@ -354,6 +401,17 @@ class StudyPortalViewModel(
                 selectMcqBank(bank, launchFullScreen = true)
             }
         }
+    }
+
+    fun launchPortionStudy(portion: OmPortionCode) {
+        val materials = (materialsState.value as? StreamUiState.Success)?.data ?: PreloadedMaterials.items
+        val mat = materials.firstOrNull { it.id == "om_study_text_2026" } ?: materials.first()
+        openMaterialInFullScreen(mat, false)
+    }
+
+    fun launchPortionTest(portion: OmPortionCode) {
+        val bank = OmMcqBanks.banks.firstOrNull { it.id == portion.linkedBankId } ?: OmMcqBanks.banks.first()
+        selectMcqBank(bank, launchFullScreen = true)
     }
 
     fun gradeTypingAnswer(question: TypingQuestion, userAnswer: String) {

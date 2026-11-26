@@ -72,9 +72,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.DailyBriefPlan
 import com.example.data.EnergyMode
+import com.example.data.ExecutiveDashboardAnalytics
 import com.example.data.FullScreenMode
 import com.example.data.MaterialProgress
 import com.example.data.McqBank
+import com.example.data.OmPortionCode
 import com.example.data.PomodoroPhase
 import com.example.data.PomodoroState
 import com.example.data.PreloadedMaterials
@@ -85,6 +87,7 @@ import com.example.data.StudyPlanItem
 import com.example.ui.components.PomodoroTimerCard
 import com.example.ui.components.StrategistBriefCard
 import com.example.ui.components.StudyRoadmapCard
+import com.example.ui.components.SyllabusWeightageCard
 import com.example.viewmodel.AiTaskState
 import com.example.viewmodel.DashboardSummary
 import com.example.viewmodel.StreamUiState
@@ -104,6 +107,9 @@ fun DashboardScreen(
     briefState: AiTaskState,
     completedRoutineIds: Set<String>,
     weakTopics: List<String>,
+    executiveAnalytics: ExecutiveDashboardAnalytics,
+    onStudyPortion: (OmPortionCode) -> Unit,
+    onTestPortion: (OmPortionCode) -> Unit,
     onSelectEnergyMode: (EnergyMode) -> Unit,
     onToggleRoutineSlot: (String) -> Unit,
     onGenerateAiBrief: () -> Unit,
@@ -150,7 +156,17 @@ fun DashboardScreen(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // 0. 30-Yr Strategist & 50-Yr Master Teacher Urdu Daily Brief + Office Routine
+        // 0. Executive Syllabus Weightage & Portion Performance Card (Part A 35%, B 20%, C 25%, D 20%)
+        item {
+            SyllabusWeightageCard(
+                analytics = executiveAnalytics,
+                daysToExam = dailyBriefPlan.daysToExam,
+                onStudyPortion = onStudyPortion,
+                onTestPortion = onTestPortion
+            )
+        }
+
+        // 1. 30-Yr Strategist & 50-Yr Master Teacher Urdu Daily Brief + Office Routine
         item {
             StrategistBriefCard(
                 plan = dailyBriefPlan,

@@ -18,9 +18,11 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.Logout
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Dashboard
 import androidx.compose.material.icons.rounded.FolderCopy
 import androidx.compose.material.icons.rounded.Fullscreen
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Quiz
 import androidx.compose.material.icons.rounded.Style
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -95,12 +97,25 @@ class MainActivity : ComponentActivity() {
 
         enableEdgeToEdge()
         setContent {
-            StudyPortalTheme {
+            val prefs = remember { getSharedPreferences("om_merit_prefs", MODE_PRIVATE) }
+            var isMidnightTheme by remember {
+                mutableStateOf(prefs.getBoolean("is_midnight_theme", true))
+            }
+            val onToggleTheme: () -> Unit = {
+                val next = !isMidnightTheme
+                isMidnightTheme = next
+                prefs.edit().putBoolean("is_midnight_theme", next).apply()
+            }
+
+            StudyPortalTheme(darkTheme = isMidnightTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppContent()
+                    AppContent(
+                        isMidnightTheme = isMidnightTheme,
+                        onToggleTheme = onToggleTheme
+                    )
                 }
             }
         }
@@ -108,7 +123,10 @@ class MainActivity : ComponentActivity() {
 }
 
 @Composable
-fun AppContent() {
+fun AppContent(
+    isMidnightTheme: Boolean,
+    onToggleTheme: () -> Unit
+) {
     var currentUser by remember { mutableStateOf(Firebase.auth.currentUser) }
 
     DisposableEffect(Unit) {
@@ -128,7 +146,9 @@ fun AppContent() {
         key(user.uid) {
             StudyPortalShell(
                 currentUserId = user.uid,
-                displayName = user.displayName ?: user.email ?: "Student"
+                displayName = user.displayName ?: user.email ?: "Student",
+                isMidnightTheme = isMidnightTheme,
+                onToggleTheme = onToggleTheme
             )
         }
     }
@@ -138,7 +158,9 @@ fun AppContent() {
 @Composable
 fun StudyPortalShell(
     currentUserId: String,
-    displayName: String
+    displayName: String,
+    isMidnightTheme: Boolean,
+    onToggleTheme: () -> Unit
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -194,6 +216,7 @@ fun StudyPortalShell(
     val typingGradingId by viewModel.typingGradingId.collectAsStateWithLifecycle()
     val readerQuickReply by viewModel.readerQuickReply.collectAsStateWithLifecycle()
     val readerQuickState by viewModel.readerQuickState.collectAsStateWithLifecycle()
+    val executiveAnalytics by viewModel.executiveAnalytics.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -360,6 +383,19 @@ fun StudyPortalShell(
                     },
                     actions = {
                         IconButton(
+                            onClick = onToggleTheme,
+                            modifier = Modifier.testTag("global_theme_toggle_button")
+                        ) {
+                            Icon(
+                                imageVector = if (isMidnightTheme) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
+                                contentDescription = if (isMidnightTheme) {
+                                    "Switch to High-Contrast Light Theme"
+                                } else {
+                                    "Switch to Midnight Theme"
+                                }
+                            )
+                        }
+                        IconButton(
                             onClick = { viewModel.toggleFullScreenForActiveTab() },
                             modifier = Modifier.testTag("topbar_fullscreen_toggle")
                         ) {
@@ -443,6 +479,9 @@ fun StudyPortalShell(
                                 briefState = briefState,
                                 completedRoutineIds = completedRoutineIds,
                                 weakTopics = weakTopics,
+                                executiveAnalytics = executiveAnalytics,
+                                onStudyPortion = { portion -> viewModel.launchPortionStudy(portion) },
+                                onTestPortion = { portion -> viewModel.launchPortionTest(portion) },
                                 onSelectEnergyMode = { mode -> viewModel.selectEnergyMode(mode) },
                                 onToggleRoutineSlot = { slotId -> viewModel.toggleRoutineSlot(slotId) },
                                 onGenerateAiBrief = { viewModel.generateAiBrief() },

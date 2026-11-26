@@ -39,13 +39,13 @@ private val DarkColorScheme = darkColorScheme(
 private val LightColorScheme = lightColorScheme(
     primary = ScholarIndigo,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFDCE7F7),
+    primaryContainer = Color(0xFFD6E3F8),
     onPrimaryContainer = ScholarIndigo,
-    secondary = ElectricTeal,
+    secondary = Color(0xFF0F766E),
     onSecondary = Color.White,
     secondaryContainer = ElectricTealContainer,
-    onSecondaryContainer = Color(0xFF064E47),
-    tertiary = WarmAmber,
+    onSecondaryContainer = Color(0xFF043D38),
+    tertiary = Color(0xFFB45309),
     onTertiary = Color.White,
     tertiaryContainer = WarmAmberContainer,
     onTertiaryContainer = Color(0xFF78350F),
@@ -57,7 +57,7 @@ private val LightColorScheme = lightColorScheme(
     onSurfaceVariant = InkSecondary,
     error = CoralError,
     onError = Color.White,
-    outline = Color(0xFFCBD5E1)
+    outline = Color(0xFF64748B)
 )
 
 val StudyPortalShapes = Shapes(
@@ -80,6 +80,18 @@ fun StudyPortalTheme(
         }
         darkTheme -> DarkColorScheme
         else -> LightColorScheme
+    }
+
+    val view = androidx.compose.ui.platform.LocalView.current
+    if (!view.isInEditMode) {
+        androidx.compose.runtime.SideEffect {
+            val window = (view.context as? android.app.Activity)?.window
+            if (window != null) {
+                val controller = androidx.core.view.WindowCompat.getInsetsController(window, view)
+                controller.isAppearanceLightStatusBars = !darkTheme
+                controller.isAppearanceLightNavigationBars = !darkTheme
+            }
+        }
     }
 
     MaterialTheme(
