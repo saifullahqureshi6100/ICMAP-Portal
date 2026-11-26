@@ -10,6 +10,7 @@ import android.graphics.Bitmap
 import android.net.Uri
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
+import com.example.ui.utils.MaleTutorTts
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
@@ -208,10 +209,7 @@ fun FullScreenReadingViewer(
         var engine: TextToSpeech? = null
         engine = TextToSpeech(context.applicationContext) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                val res = engine?.setLanguage(java.util.Locale("ur", "PK"))
-                if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    engine?.language = java.util.Locale.US
-                }
+                MaleTutorTts.configureMaleVoice(engine, preferUrdu = true)
                 readerTtsReady = true
             }
         }

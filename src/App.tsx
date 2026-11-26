@@ -52,6 +52,11 @@ import {
   parseTypingQuestionsFromAi
 } from './lib/freeAiClient';
 import {
+  preloadMaleVoices,
+  speakWithMaleTutor,
+  stopTutorSpeech
+} from './lib/maleVoiceTts';
+import {
   AiEngineMode,
   DailyBriefPlan,
   DailyRoutineSlot,
@@ -91,6 +96,13 @@ function saveStored<T>(key: string, value: T) {
   } catch {
     // Ignore storage quota errors
   }
+}
+
+function getLocalDateKey(date = new Date()): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
 }
 
 export default function App() {
@@ -158,6 +170,37 @@ export default function App() {
   const [studyMinutesTotal, setStudyMinutesTotal] = useState<number>(() =>
     loadStored('icmap_study_minutes', 0)
   );
+  const [dailyStudyMinutes, setDailyStudyMinutes] = useState<Record<string, number>>(() => {
+    const stored = loadStored<Record<string, number>>('icmap_daily_study_minutes', {});
+    const total = loadStored<number>('icmap_study_minutes', 0);
+    if (Object.keys(stored).length === 0 && total > 0) {
+      return { [getLocalDateKey()]: total };
+    }
+    return stored;
+  });
+
+  function logStudyMinutes(minutes: number, sourceLabel?: string) {
+    const safeMinutes = Math.max(1, Math.round(minutes));
+    const todayKey = getLocalDateKey();
+    setStudyMinutesTotal((prev) => {
+      const updated = prev + safeMinutes;
+      saveStored('icmap_study_minutes', updated);
+      return updated;
+    });
+    setDailyStudyMinutes((prev) => {
+      const updated = {
+        ...prev,
+        [todayKey]: (prev[todayKey] || 0) + safeMinutes
+      };
+      saveStored('icmap_daily_study_minutes', updated);
+      return updated;
+    });
+    showToast(
+      sourceLabel
+        ? `Logged +${safeMinutes}m (${sourceLabel})!`
+        : `Focus session completed! +${safeMinutes} minutes logged.`
+    );
+  }
   const [pomodoroSettings, setPomodoroSettings] = useState<PomodoroSettings>(() =>
     loadStored('icmap_pomodoro_cfg', {
       workMinutes: 25,
@@ -236,6 +279,7 @@ export default function App() {
         setIsFullScreen(false);
       }
     };
+    preloadMaleVoices();
     window.addEventListener('beforeinstallprompt', onBeforeInstall);
     document.addEventListener('fullscreenchange', onFullscreenChange);
     return () => {
@@ -245,28 +289,15 @@ export default function App() {
   }, []);
 
   function speakText(text: string, targetLang: TutorLang) {
-    if (typeof window === 'undefined' || !window.speechSynthesis) return;
-    window.speechSynthesis.cancel();
-    const clean = String(text)
-      .replace(/[#*`]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .slice(0, 1800);
-    if (!clean) return;
-    const utterance = new SpeechSynthesisUtterance(clean);
-    utterance.lang = targetLang === 'ur' ? 'ur-PK' : 'en-US';
-    utterance.rate = 0.94;
-    utterance.onstart = () => setIsSpeaking(true);
-    utterance.onend = () => setIsSpeaking(false);
-    utterance.onerror = () => setIsSpeaking(false);
-    setIsSpeaking(true);
-    window.speechSynthesis.speak(utterance);
+    speakWithMaleTutor(text, targetLang, {
+      onStart: () => setIsSpeaking(true),
+      onEnd: () => setIsSpeaking(false),
+      onError: () => setIsSpeaking(false)
+    });
   }
 
   function stopSpeech() {
-    if (typeof window !== 'undefined' && window.speechSynthesis) {
-      window.speechSynthesis.cancel();
-    }
+    stopTutorSpeech();
     setIsSpeaking(false);
   }
 
@@ -497,6 +528,12 @@ export default function App() {
     setTestHistory(nextHistory);
     saveStored('icmap_test_history', nextHistory);
 
+    const earnedMinutes = Math.max(
+      5,
+      Math.round(summary.mcqTotal * 1 + summary.typingCompleted * 5)
+    );
+    logStudyMinutes(earnedMinutes, summary.title);
+
     if (summary.weakTopicsDetected.length > 0) {
       const mergedWeak = Array.from(
         new Set([...summary.weakTopicsDetected, ...weakTopics])
@@ -504,10 +541,12 @@ export default function App() {
       setWeakTopics(mergedWeak);
       saveStored('icmap_weak_topics', mergedWeak);
       showToast(
-        `Plan updated! Added revision for: ${summary.weakTopicsDetected.join(', ')}`
+        `+${earnedMinutes}m logged • Plan updated for: ${summary.weakTopicsDetected.join(', ')}`
       );
     } else {
-      showToast('Strong Merit Score! Moving forward on your 5 Dec 2026 roadmap.');
+      showToast(
+        `Strong Merit Score (+${earnedMinutes}m logged)! Moving forward on your 5 Dec 2026 roadmap.`
+      );
     }
   }
 
@@ -752,10 +791,7 @@ export default function App() {
                 saveStored('icmap_pomodoro_cfg', next);
               }}
               onFocusSessionCompleted={(mins) => {
-                const updated = studyMinutesTotal + mins;
-                setStudyMinutesTotal(updated);
-                saveStored('icmap_study_minutes', updated);
-                showToast(`Focus block complete! Logged ${mins}m.`);
+                logStudyMinutes(mins, 'Pomodoro focus block');
               }}
               isFullScreen
               onToggleFullScreen={() => toggleFullScreen()}
@@ -1253,9 +1289,11 @@ export default function App() {
                   daysToExam={dailyPlan.daysToExam}
                   weakTopics={weakTopics}
                   studyMinutesTotal={studyMinutesTotal}
+                  dailyStudyMinutes={dailyStudyMinutes}
                   completedMilestonesCount={completedMilestones.length}
                   totalMilestonesCount={ROADMAP_MILESTONES.length}
                   testAttemptsCount={testHistory.length}
+                  onLogStudyMinutes={logStudyMinutes}
                   onPracticePortion={(bankFilter) => {
                     setPreferredTestMode('portion_grand');
                     setPreferredPortionFilter(bankFilter);
@@ -1317,10 +1355,7 @@ export default function App() {
                       saveStored('icmap_pomodoro_cfg', next);
                     }}
                     onFocusSessionCompleted={(mins) => {
-                      const updated = studyMinutesTotal + mins;
-                      setStudyMinutesTotal(updated);
-                      saveStored('icmap_study_minutes', updated);
-                      showToast(`Focus session completed! +${mins} minutes logged.`);
+                      logStudyMinutes(mins, 'Pomodoro focus block');
                     }}
                     isFullScreen={false}
                     onToggleFullScreen={() => toggleFullScreen('pomodoro')}

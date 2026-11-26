@@ -3,9 +3,11 @@ import {
   Award,
   BookOpen,
   CheckCircle2,
+  Clock,
   Flame,
   Layers,
   Play,
+  Plus,
   Sparkles,
   Target,
   TrendingUp
@@ -13,7 +15,11 @@ import {
 import {
   Bar,
   BarChart,
+  CartesianGrid,
   Legend,
+  Line,
+  LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -26,9 +32,11 @@ interface ExecutiveDashboardProps {
   daysToExam: number;
   weakTopics: string[];
   studyMinutesTotal: number;
+  dailyStudyMinutes: Record<string, number>;
   completedMilestonesCount: number;
   totalMilestonesCount: number;
   testAttemptsCount: number;
+  onLogStudyMinutes: (minutes: number, sourceLabel?: string) => void;
   onPracticePortion: (
     bankFilter: 'part_a_ops' | 'part_b_hrm' | 'part_c_mkt' | 'part_d_epm'
   ) => void;
@@ -101,14 +109,62 @@ function readinessLabel(pct: number): { label: string; cls: string } {
   };
 }
 
+function toLocalIsoDate(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+interface WeeklyStudyPoint {
+  dateKey: string;
+  dayShort: string;
+  dateLabel: string;
+  minutes: number;
+  isToday: boolean;
+}
+
+function buildCurrentWeekStudySeries(
+  dailyStudyMinutes: Record<string, number>,
+  referenceDate = new Date()
+): WeeklyStudyPoint[] {
+  const todayKey = toLocalIsoDate(referenceDate);
+  const start = new Date(
+    referenceDate.getFullYear(),
+    referenceDate.getMonth(),
+    referenceDate.getDate()
+  );
+  // Align week start to Monday (Mon .. Sun)
+  const dayOfWeek = start.getDay();
+  const diffToMonday = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  start.setDate(start.getDate() + diffToMonday);
+
+  const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  return dayNames.map((dayShort, idx) => {
+    const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + idx);
+    const key = toLocalIsoDate(d);
+    return {
+      dateKey: key,
+      dayShort,
+      dateLabel: `${dayShort} ${d.getDate()} ${monthNames[d.getMonth()]}`,
+      minutes: Math.max(0, Math.round(dailyStudyMinutes[key] || 0)),
+      isToday: key === todayKey
+    };
+  });
+}
+
 export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
   portions,
   daysToExam,
   weakTopics,
   studyMinutesTotal,
+  dailyStudyMinutes,
   completedMilestonesCount,
   totalMilestonesCount,
   testAttemptsCount,
+  onLogStudyMinutes,
   onPracticePortion,
   onStudyPortion,
   onOpenRepairTopic
@@ -141,6 +197,14 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
     Preparation: p.overallPrepPct,
     TestMarks: p.testMarksPct ?? 0
   }));
+
+  const weeklySeries = buildCurrentWeekStudySeries(dailyStudyMinutes);
+  const weeklyMinutesTotal = weeklySeries.reduce((sum, d) => sum + d.minutes, 0);
+  const activeWeekDays = weeklySeries.filter((d) => d.minutes > 0).length;
+  const todayEntry = weeklySeries.find((d) => d.isToday);
+  const elapsedWeekDays = Math.max(1, weeklySeries.findIndex((d) => d.isToday) + 1);
+  const weeklyDailyAverage = Math.round(weeklyMinutesTotal / elapsedWeekDays);
+  const weekRangeLabel = `${weeklySeries[0]?.dateLabel || ''} – ${weeklySeries[6]?.dateLabel || ''}`;
 
   return (
     <div className="space-y-5">
@@ -402,7 +466,123 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
         })}
       </div>
 
-      {/* 3. Weightage vs Preparation Chart & High-Yield 2025 Watchlist */}
+      {/* 3. Weekly Study Consistency Line Chart (Recharts) */}
+      <div
+        className="glass rounded-3xl p-5 space-y-4"
+        data-testid="weekly_study_consistency_card"
+      >
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-xs uppercase tracking-wider text-cyan-300 font-semibold flex items-center gap-1.5">
+              <Clock size={14} /> Current Week Focus Trend • {weekRangeLabel}
+            </div>
+            <h3 className="text-lg font-bold mt-0.5">Weekly Study Consistency</h3>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Total study minutes logged per day this week from Pomodoro blocks, graded tests, and manual sessions.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => onLogStudyMinutes(15, 'Quick 15m reading')}
+              data-testid="log_study_15m_button"
+              className="px-3 py-2 rounded-xl bg-white/10 hover:bg-cyan-500/20 border border-white/15 text-xs font-semibold flex items-center gap-1 min-h-[40px]"
+            >
+              <Plus size={13} /> +15m Study
+            </button>
+            <button
+              type="button"
+              onClick={() => onLogStudyMinutes(25, '25m focus block')}
+              data-testid="log_study_25m_button"
+              className="px-3 py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-300/30 text-xs font-bold text-cyan-100 flex items-center gap-1 min-h-[40px]"
+            >
+              <Plus size={13} /> +25m Block
+            </button>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+          <div className="rounded-2xl bg-white/5 border border-white/10 px-3.5 py-2.5">
+            <div className="text-[10px] uppercase tracking-wider text-slate-400">This Week Total</div>
+            <div className="text-lg font-extrabold text-cyan-200 mt-0.5">{weeklyMinutesTotal}m</div>
+          </div>
+          <div className="rounded-2xl bg-white/5 border border-white/10 px-3.5 py-2.5">
+            <div className="text-[10px] uppercase tracking-wider text-slate-400">Today Logged</div>
+            <div className="text-lg font-extrabold text-emerald-200 mt-0.5">
+              {todayEntry?.minutes || 0}m
+            </div>
+          </div>
+          <div className="rounded-2xl bg-white/5 border border-white/10 px-3.5 py-2.5">
+            <div className="text-[10px] uppercase tracking-wider text-slate-400">Daily Avg (Elapsed)</div>
+            <div className="text-lg font-extrabold text-violet-200 mt-0.5">{weeklyDailyAverage}m</div>
+          </div>
+          <div className="rounded-2xl bg-white/5 border border-white/10 px-3.5 py-2.5">
+            <div className="text-[10px] uppercase tracking-wider text-slate-400">Active Days</div>
+            <div className="text-lg font-extrabold text-amber-200 mt-0.5">{activeWeekDays} / 7</div>
+          </div>
+        </div>
+
+        <div className="h-64 w-full">
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={weeklySeries} margin={{ top: 10, right: 16, left: 0, bottom: 4 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="rgba(148,163,184,0.22)" vertical={false} />
+              <XAxis
+                dataKey="dayShort"
+                stroke="#64748b"
+                tick={{ fontSize: 12, fill: '#64748b' }}
+              />
+              <YAxis
+                stroke="#64748b"
+                tick={{ fontSize: 11, fill: '#64748b' }}
+                unit="m"
+                allowDecimals={false}
+                width={44}
+              />
+              <Tooltip
+                labelFormatter={(_label, payload) =>
+                  payload?.[0]?.payload?.dateLabel
+                    ? `${payload[0].payload.dateLabel}${payload[0].payload.isToday ? ' (Today)' : ''}`
+                    : ''
+                }
+                formatter={(value) => [`${value ?? 0} minutes`, 'Study Logged']}
+                contentStyle={{
+                  backgroundColor: '#0f172a',
+                  borderColor: 'rgba(56,189,248,0.45)',
+                  borderRadius: '12px',
+                  fontSize: '12px',
+                  color: '#f8fafc'
+                }}
+                itemStyle={{ color: '#38bdf8', fontWeight: 700 }}
+                labelStyle={{ color: '#e2e8f0', fontWeight: 700, marginBottom: 4 }}
+              />
+              <Legend wrapperStyle={{ fontSize: '11px' }} />
+              <ReferenceLine
+                y={120}
+                stroke="#f59e0b"
+                strokeDasharray="5 4"
+                label={{
+                  value: '120m Target',
+                  position: 'insideTopRight',
+                  fill: '#f59e0b',
+                  fontSize: 10
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="minutes"
+                name="Daily Study Minutes"
+                stroke="#0ea5e9"
+                strokeWidth={3}
+                dot={{ r: 5, fill: '#0ea5e9', stroke: '#ffffff', strokeWidth: 2 }}
+                activeDot={{ r: 7, fill: '#38bdf8', stroke: '#0f172a', strokeWidth: 2 }}
+              />
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+
+      {/* 4. Weightage vs Preparation Chart & High-Yield 2025 Watchlist */}
       <div className="grid lg:grid-cols-[1.35fr_1fr] gap-5">
         <div className="glass rounded-3xl p-5">
           <div className="flex items-center justify-between gap-2">
@@ -426,7 +606,8 @@ export const ExecutiveDashboard: React.FC<ExecutiveDashboardProps> = ({
                     backgroundColor: '#0f172a',
                     borderColor: 'rgba(148,163,184,0.25)',
                     borderRadius: '12px',
-                    fontSize: '12px'
+                    fontSize: '12px',
+                    color: '#f8fafc'
                   }}
                 />
                 <Legend wrapperStyle={{ fontSize: '11px' }} />

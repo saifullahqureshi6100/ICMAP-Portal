@@ -9,6 +9,7 @@ import android.net.Uri
 import android.speech.RecognizerIntent
 import android.speech.tts.TextToSpeech
 import android.widget.Toast
+import com.example.ui.utils.MaleTutorTts
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -127,7 +128,7 @@ fun TutorScreen(
         var engine: TextToSpeech? = null
         engine = TextToSpeech(context.applicationContext) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                engine?.language = Locale.US
+                MaleTutorTts.configureMaleVoice(engine, preferUrdu = true)
                 ttsReady = true
             }
         }

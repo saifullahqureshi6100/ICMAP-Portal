@@ -1,6 +1,7 @@
 package com.example.ui.components
 
 import android.speech.tts.TextToSpeech
+import com.example.ui.utils.MaleTutorTts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -90,10 +91,8 @@ fun StrategistBriefCard(
         var engine: TextToSpeech? = null
         engine = TextToSpeech(context.applicationContext) { status ->
             if (status == TextToSpeech.SUCCESS) {
-                val urPk = Locale("ur", "PK")
-                val res = engine?.setLanguage(urPk)
-                if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
-                    engine?.language = Locale.US
+                MaleTutorTts.configureMaleVoice(engine, preferUrdu = true) {
+                    isSpeaking = false
                 }
                 ttsReady = true
             }
