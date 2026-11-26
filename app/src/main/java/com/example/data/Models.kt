@@ -25,8 +25,8 @@ data class UserProfile(
     @DocumentId val id: String = "",
     val userId: String = "",
     val displayName: String = "Student",
-    val studyGoal: String = "Master Core Study Modules",
-    val dailyTargetMinutes: Long = 45L,
+    val studyGoal: String = "OM M3 Certificate of Merit (5 Dec 2026)",
+    val dailyTargetMinutes: Long = 180L,
     val totalStudyMinutes: Long = 0L,
     val completedSessions: Long = 0L,
     @ServerTimestamp val createdAt: Timestamp? = null,
@@ -143,8 +143,12 @@ data class TutorMessage(
 
 enum class TutorEngineMode(val label: String, val subtitle: String) {
     GEMINI_BUILTIN(
-        label = "Built-in Gemini",
+        label = "Gemini 3.8 Flash",
         subtitle = "$0 Primary • Multimodal + Streaming"
+    ),
+    GEMINI_LITE(
+        label = "Gemini 3.5 Lite",
+        subtitle = "$0 High-Quota • Fast Token Saver"
     ),
     POLLINATIONS_FREE(
         label = "Pollinations Free",
@@ -502,6 +506,17 @@ object PreloadedMaterials {
             category = "Master Guide",
             estimatedMinutes = 30L,
             preloaded = true
+        ),
+        StudyMaterial(
+            id = "drive_folder_extra",
+            title = "OM Supplementary Notes Folder 7",
+            description = "Additional OM Google Drive study folder with supplemental notes and exam handouts.",
+            materialType = MaterialType.DRIVE_FOLDER.name,
+            sourceUrl = "https://drive.google.com/drive/folders/1EdfluOCsZ_NUiRZE_oJRT9eXiK4d4aT3",
+            contentMarkdown = "### OM Supplementary Notes Folder 7\nOpen this Google Drive folder in full-screen or browser to review supplemental OM chapters, notes, and handouts.",
+            category = "Drive Collection 2",
+            estimatedMinutes = 30L,
+            preloaded = true
         )
     )
 }
@@ -849,14 +864,33 @@ object OmMcqBanks {
 
     val banks: List<McqBank> = listOf(
         McqBank(
+            id = "om_office_short_test",
+            title = "Short Test during Office (10 Qs • 12:45 PM)",
+            subtitle = "Lunch-break rapid drill across Balanced Scorecard, Mintzberg, Quality Circles, HRM & MRP",
+            questions = unit13To14Questions.take(3) +
+                unit1To4Questions.take(3) +
+                unit5To7Questions.take(2) +
+                unit8To9Questions.take(2)
+        ),
+        McqBank(
+            id = "om_test_of_the_day",
+            title = "Test of the Day — High-Yield Merit (20 Qs)",
+            subtitle = "Daily 8:15 PM timed 60% MCQ section benchmarked to ICMA / ACCA / CIMA",
+            questions = unit1To4Questions.take(4) +
+                unit5To7Questions.take(4) +
+                unit8To9Questions.take(4) +
+                unit10To12Questions.take(4) +
+                unit13To14Questions.take(4)
+        ),
+        McqBank(
             id = "om_mock_exam",
-            title = "OM ML-1 Mixed Mock Exam (15 Qs)",
-            subtitle = "Comprehensive timed practice across Operations, TPM, HRM, Marketing & Performance Mgmt",
-            questions = unit1To4Questions.take(3) +
-                unit5To7Questions.take(3) +
-                unit8To9Questions.take(3) +
-                unit10To12Questions.take(3) +
-                unit13To14Questions.take(3)
+            title = "Full-Course Merit Mock Exam (All Units)",
+            subtitle = "Comprehensive timed simulation across all 14 OM Units before 5 Dec 2026",
+            questions = unit1To4Questions +
+                unit5To7Questions +
+                unit8To9Questions +
+                unit10To12Questions +
+                unit13To14Questions
         ),
         McqBank(
             id = "om_bank_1_4",
@@ -961,5 +995,75 @@ object PreloadedFlashcards {
         )
     )
 }
+
+data class TypingQuestion(
+    val id: String,
+    val topicTag: String,
+    val marks: Int,
+    val sourceBenchmark: String,
+    val question: String,
+    val keywords: List<String>,
+    val modelAnswer: String
+)
+
+object OmTypingQuestions {
+    val items: List<TypingQuestion> = listOf(
+        TypingQuestion(
+            id = "typ_q4_bsc",
+            topicTag = "Balanced Scorecard",
+            marks = 5,
+            sourceBenchmark = "ICMA ML-1 Past Paper Q.4",
+            question = "Explain five key disadvantages or pitfalls of implementing a Balanced Scorecard (BSC).",
+            keywords = listOf("qualitative", "overload", "conflict", "misaligned", "senior management"),
+            modelAnswer = "1) Difficulty measuring qualitative non-financial data.\n2) Information overload from too many KPIs.\n3) Conflict between metrics (e.g., cutting R&D boosts short-term profit).\n4) Measures misaligned with corporate strategy.\n5) Failure without senior management commitment & high setup cost."
+        ),
+        TypingQuestion(
+            id = "typ_q6_mintzberg",
+            topicTag = "Mintzberg 5 Parts",
+            marks = 5,
+            sourceBenchmark = "ICMA ML-1 Past Paper Q.6",
+            question = "Describe the five basic parts of Mintzberg's Effective Organization with corporate examples.",
+            keywords = listOf("operating core", "strategic apex", "middle line", "technostructure", "support staff"),
+            modelAnswer = "1) Operating Core: Frontline workers producing goods/services.\n2) Strategic Apex: Top executives setting strategy.\n3) Middle Line: Managerial hierarchy linking apex to frontline.\n4) Technostructure: Analysts standardizing processes/outputs (e.g., management accountants, HR planners).\n5) Support Staff: Indirect services (legal, PR, catering)."
+        ),
+        TypingQuestion(
+            id = "typ_q9_qc",
+            topicTag = "Quality Circles & TPM",
+            marks = 5,
+            sourceBenchmark = "ICMA ML-1 Past Paper Q.9",
+            question = "Define a Quality Circle and state four advantages to a manufacturing or service organization.",
+            keywords = listOf("voluntary", "shop-floor", "productivity", "continuous improvement", "unity"),
+            modelAnswer = "A small voluntary group of employees with mixed skills meeting regularly to solve workplace quality problems. Advantages: (1) Higher product quality & customer satisfaction; (2) Increased productivity & lower waste; (3) Operational staff know shop-floor defects best; (4) Fosters continuous improvement culture & unity."
+        ),
+        TypingQuestion(
+            id = "typ_q10_mrp",
+            topicTag = "MRP & OPT",
+            marks = 5,
+            sourceBenchmark = "ICMA ML-1 Past Paper Q.10",
+            question = "Explain five operational and financial benefits of Material Requirement Planning (MRP).",
+            keywords = listOf("customer orders", "stock holding", "bottlenecks", "suppliers", "demand"),
+            modelAnswer = "1) Improved ability to meet customer delivery deadlines.\n2) Reduced inventory holding & working capital costs.\n3) Fast computerized schedule updates when demand shifts.\n4) Early warning of purchasing or production bottlenecks.\n5) Closer, reliable relationships with suppliers."
+        ),
+        TypingQuestion(
+            id = "typ_q8_interviews",
+            topicTag = "HRM & Motivation",
+            marks = 5,
+            sourceBenchmark = "ICMA ML-1 Past Paper Q.8",
+            question = "Discuss the general limitations and interviewer judgment errors in selection interviews.",
+            keywords = listOf("unreliable", "predictive validity", "halo effect", "contagious bias", "stereotyping"),
+            modelAnswer = "Interviews suffer from low reliability (assessors disagree) and weak predictive validity of actual job performance. Key judgment errors: (1) Halo effect; (2) Contagious bias (leading cues); (3) Stereotyping based on dress/voice/accent; (4) Misjudging abstract traits like honesty; (5) Logical error."
+        ),
+        TypingQuestion(
+            id = "typ_q1_mktg",
+            topicTag = "Marketing Concept & STP",
+            marks = 5,
+            sourceBenchmark = "ICMA ML-1 Past Paper Q.1 & Q.5",
+            question = "Define the Marketing Concept and contrast it with three drawbacks of Sales Orientation.",
+            keywords = listOf("target market", "satisfaction", "competitors", "short-term", "turnover"),
+            modelAnswer = "Marketing Concept: Determining needs, wants, and values of a target market and delivering desired satisfaction more effectively/efficiently than rivals. Sales Orientation drawbacks: (1) Customer dissatisfaction from pushy tactics; (2) Short-term focus over loyalty; (3) Lack of innovation & high sales staff turnover."
+        )
+    )
+}
+
 
 

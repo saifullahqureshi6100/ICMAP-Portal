@@ -3,6 +3,7 @@ import {
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
+  Clock,
   HelpCircle,
   Maximize2,
   Minimize2,
@@ -17,6 +18,8 @@ import { FlashcardItem } from '../types';
 
 interface FlashcardDeckProps {
   cards: FlashcardItem[];
+  todayFiveCardIds: string[];
+  defaultTodayFiveMode?: boolean;
   onRecordReview: (cardId: string, mastered: boolean) => void;
   onAddCustomCard: (deck: string, front: string, back: string, hint: string) => void;
   onDeleteCard: (cardId: string) => void;
@@ -28,6 +31,8 @@ interface FlashcardDeckProps {
 
 export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
   cards,
+  todayFiveCardIds,
+  defaultTodayFiveMode = false,
   onRecordReview,
   onAddCustomCard,
   onDeleteCard,
@@ -37,11 +42,17 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
   onToggleFullScreen
 }) => {
   const decks = useMemo(
-    () => ['All Decks', ...Array.from(new Set(cards.map((c) => c.deck)))],
+    () => [
+      "Today's 5 Daily Cards (5:30 PM)",
+      'All Decks',
+      ...Array.from(new Set(cards.map((c) => c.deck)))
+    ],
     [cards]
   );
 
-  const [selectedDeck, setSelectedDeck] = useState('All Decks');
+  const [selectedDeck, setSelectedDeck] = useState(
+    defaultTodayFiveMode ? "Today's 5 Daily Cards (5:30 PM)" : 'All Decks'
+  );
   const [shuffledOrder, setShuffledOrder] = useState<string[]>([]);
   const [index, setIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
@@ -53,15 +64,24 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
   const [newBack, setNewBack] = useState('');
   const [newHint, setNewHint] = useState('');
 
+  useEffect(() => {
+    if (defaultTodayFiveMode) {
+      setSelectedDeck("Today's 5 Daily Cards (5:30 PM)");
+      setIndex(0);
+    }
+  }, [defaultTodayFiveMode]);
+
   const filteredCards = useMemo(() => {
     const base =
-      selectedDeck === 'All Decks'
-        ? cards
-        : cards.filter((c) => c.deck === selectedDeck);
+      selectedDeck === "Today's 5 Daily Cards (5:30 PM)"
+        ? cards.filter((c) => todayFiveCardIds.includes(c.id))
+        : selectedDeck === 'All Decks'
+          ? cards
+          : cards.filter((c) => c.deck === selectedDeck);
     if (!shuffledOrder.length) return base;
     const rank = new Map(shuffledOrder.map((id, idx) => [id, idx]));
     return [...base].sort((a, b) => (rank.get(a.id) ?? 9999) - (rank.get(b.id) ?? 9999));
-  }, [cards, selectedDeck, shuffledOrder]);
+  }, [cards, selectedDeck, todayFiveCardIds, shuffledOrder]);
 
   useEffect(() => {
     if (index >= filteredCards.length && filteredCards.length > 0) {
@@ -71,7 +91,6 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
 
   const currentCard = filteredCards[index] ?? null;
 
-  // Laptop keyboard navigation (Space = Flip, ArrowLeft/Right = Prev/Next)
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent) {
       const target = e.target as HTMLElement | null;
@@ -123,7 +142,9 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
     e.preventDefault();
     if (!newFront.trim() || !newBack.trim()) return;
     const targetDeck =
-      selectedDeck === 'All Decks' ? 'Custom Flashcards' : selectedDeck;
+      selectedDeck === 'All Decks' || selectedDeck.startsWith("Today's 5")
+        ? 'Custom Flashcards'
+        : selectedDeck;
     onAddCustomCard(targetDeck, newFront.trim(), newBack.trim(), newHint.trim());
     setNewFront('');
     setNewBack('');
@@ -132,23 +153,27 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
   }
 
   const masteredCount = filteredCards.filter((c) => c.mastered).length;
+  const dayBadge = (offset?: number) => {
+    if (offset === -1) return 'Yesterday Review';
+    if (offset === -2) return '2–3 Days Ago Review';
+    if (offset === 1) return 'Upcoming Topic Prep';
+    return 'Today Focus';
+  };
 
   return (
     <div className="space-y-5">
-      {/* Header & AI Generator Strip */}
       <div className="glass rounded-3xl p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <div className="text-xs uppercase tracking-widest text-cyan-300 font-semibold">
-              Active Recall Flashcards
+            <div className="text-xs uppercase tracking-widest text-cyan-300 font-semibold flex items-center gap-1.5">
+              <Clock size={13} /> Post-Office 5:30 PM Tired Recovery & Spaced Repetition
             </div>
             <h2 className="text-xl md:text-2xl font-bold mt-0.5">
-              Shuffle & Flip Study Deck ({masteredCount}/{filteredCards.length} Mastered)
+              Shuffle & Flip Deck ({masteredCount}/{filteredCards.length} Mastered)
             </h2>
             <p className="text-xs text-slate-400 mt-1">
-              Tap card or press <kbd className="px-1.5 py-0.5 rounded bg-white/10">Space</kbd> to flip •{' '}
-              <kbd className="px-1.5 py-0.5 rounded bg-white/10">←</kbd>{' '}
-              <kbd className="px-1.5 py-0.5 rounded bg-white/10">→</kbd> to navigate
+              Curated daily mix of yesterday, 2–3 days back, weak test topics & upcoming concepts • Tap card or press{' '}
+              <kbd className="px-1.5 py-0.5 rounded bg-white/10">Space</kbd> to flip
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -177,7 +202,7 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
           </div>
         </div>
 
-        {/* AI Generate from Reading Material */}
+        {/* AI Generate Today's 5 Cards from Reading Material */}
         <div className="mt-4 pt-4 border-t border-white/10 flex flex-col sm:flex-row gap-2.5 items-stretch sm:items-center">
           <select
             value={genMaterialId}
@@ -193,11 +218,11 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
           <button
             type="button"
             disabled={isGenerating}
-            onClick={() => onGenerateFromMaterial(genMaterialId, 6)}
+            onClick={() => onGenerateFromMaterial(genMaterialId, 5)}
             className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-500 text-xs font-semibold flex items-center justify-center gap-1.5 min-h-[44px]"
           >
             <Sparkles size={15} />
-            {isGenerating ? 'Generating 6 AI Cards...' : 'Generate 6 Cards from Reading'}
+            {isGenerating ? 'Generating 5 AI Cards...' : 'Generate 5 Today Cards from Reading'}
           </button>
         </div>
 
@@ -215,7 +240,7 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
               }}
               className={`px-3 py-1.5 rounded-full text-xs whitespace-nowrap border transition ${
                 selectedDeck === deck
-                  ? 'bg-cyan-400/20 text-cyan-200 border-cyan-300/40'
+                  ? 'bg-cyan-400/20 text-cyan-200 border-cyan-300/40 font-semibold'
                   : 'bg-white/5 text-slate-400 border-white/10 hover:text-white'
               }`}
             >
@@ -269,9 +294,10 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
       {/* 3D Flip Card Stage */}
       {currentCard ? (
         <div className="glass rounded-3xl p-5 md:p-7">
-          <div className="flex items-center justify-between text-xs text-slate-400 mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400 mb-4">
             <span>
-              Card {index + 1} of {filteredCards.length} • {currentCard.deck}
+              Card {index + 1} of {filteredCards.length} • {currentCard.topicTag || currentCard.deck} •{' '}
+              <span className="text-violet-300">{dayBadge(currentCard.dayOffsetTag)}</span>
             </span>
             <div className="flex items-center gap-2">
               {currentCard.mastered && (
@@ -290,7 +316,6 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
             </div>
           </div>
 
-          {/* 3D Flip Card */}
           <div className="perspective-1200 w-full max-w-2xl mx-auto">
             <button
               type="button"
@@ -302,7 +327,6 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
                   isFlipped ? 'rotate-y-180' : ''
                 }`}
               >
-                {/* Front Face */}
                 <div className="absolute inset-0 backface-hidden rounded-3xl bg-gradient-to-br from-cyan-500/18 via-slate-900/90 to-violet-500/18 border border-cyan-300/25 p-6 md:p-8 flex flex-col justify-between">
                   <div className="flex items-center justify-between text-[11px] uppercase tracking-widest text-cyan-300 font-semibold">
                     <span>Question / Recall Prompt</span>
@@ -316,7 +340,6 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
                   </div>
                 </div>
 
-                {/* Back Face */}
                 <div className="absolute inset-0 backface-hidden rotate-y-180 rounded-3xl bg-gradient-to-br from-emerald-500/16 via-slate-900/95 to-cyan-500/18 border border-emerald-300/30 p-6 md:p-8 flex flex-col justify-between">
                   <div className="flex items-center justify-between text-[11px] uppercase tracking-widest text-emerald-300 font-semibold">
                     <span>Model Answer</span>
@@ -326,14 +349,13 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
                     {currentCard.back}
                   </div>
                   <div className="text-center text-xs text-slate-400">
-                    Self-grade below to track mastery
+                    Self-grade below to update mastery
                   </div>
                 </div>
               </div>
             </button>
           </div>
 
-          {/* Optional Hint */}
           {currentCard.hint && (
             <div className="max-w-2xl mx-auto mt-3 text-center">
               {showHint ? (
@@ -352,7 +374,6 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
             </div>
           )}
 
-          {/* Controls */}
           <div className="max-w-2xl mx-auto mt-5 flex flex-wrap items-center justify-between gap-3">
             <div className="flex gap-2">
               <button
@@ -391,7 +412,7 @@ export const FlashcardDeck: React.FC<FlashcardDeckProps> = ({
         </div>
       ) : (
         <div className="glass rounded-3xl p-10 text-center text-slate-400 text-sm">
-          No flashcards in this deck yet. Generate 6 cards from any reading material above!
+          No flashcards in this filter yet. Switch to "All Decks" or generate 5 cards above!
         </div>
       )}
     </div>

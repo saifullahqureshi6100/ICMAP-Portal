@@ -1,8 +1,8 @@
 export type PortalTab =
   | 'home'
   | 'read'
-  | 'tests'
   | 'flashcards'
+  | 'tests'
   | 'tutor'
   | 'videos'
   | 'materials'
@@ -11,6 +11,14 @@ export type PortalTab =
 export type TutorLang = 'en' | 'ur';
 
 export type AiEngineMode = 'auto_free' | 'pollinations_direct';
+
+export type TestModeKind =
+  | 'office_short'
+  | 'daily_test'
+  | 'weekly_grand'
+  | 'portion_grand'
+  | 'half_book_mock'
+  | 'full_course_mock';
 
 export interface SubjectInfo {
   code: string;
@@ -40,15 +48,29 @@ export interface StudyMaterialItem {
 export interface McqQuestionItem {
   id: string;
   bankId: string;
+  topicTag: string;
+  sourceBenchmark?: string;
   question: string;
   options: string[];
   answer: number;
   explanation: string;
 }
 
+export interface TypingQuestionItem {
+  id: string;
+  topicTag: string;
+  marks: number;
+  sourceBenchmark: string;
+  question: string;
+  keywords: string[];
+  modelAnswer: string;
+}
+
 export interface FlashcardItem {
   id: string;
   deck: string;
+  topicTag?: string;
+  dayOffsetTag?: number; // 0 = today, -1 = yesterday, -2 = 2 days ago, +1 = upcoming
   front: string;
   back: string;
   hint?: string;
@@ -64,6 +86,43 @@ export interface RoadmapMilestone {
   targetMinutes: number;
   linkedMaterialId: string;
   linkedTopic: string;
+}
+
+export interface DailyRoutineSlot {
+  id: string;
+  timeWindow: string;
+  label: string;
+  durationMinutes: number;
+  activity: string;
+  topicFocus: string;
+  actionType: 'read_video' | 'office_short_test' | 'flashcards' | 'daily_test' | 'recovery';
+  completed: boolean;
+}
+
+export interface DailyBriefPlan {
+  dateKey: string;
+  daysToExam: number;
+  examPhaseTitle: string;
+  totalStudyMinutes: number;
+  energyMode: 'normal' | 'busy_office' | 'low_recovery' | 'final_sprint';
+  todayTopic: string;
+  todayVideoQuery: string;
+  upcomingAlert: string;
+  studyTechniqueTip: string;
+  urduSpokenBrief: string;
+  slots: DailyRoutineSlot[];
+}
+
+export interface TestAttemptSummary {
+  id: string;
+  kind: TestModeKind;
+  title: string;
+  mcqCorrect: number;
+  mcqTotal: number;
+  typingCompleted: number;
+  typingTotal: number;
+  weakTopicsDetected: string[];
+  timestamp: number;
 }
 
 export type PomodoroPhase = 'work' | 'short_break' | 'long_break';

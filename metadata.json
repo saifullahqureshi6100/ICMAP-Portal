@@ -1,6 +1,6 @@
 {
-  "name": "Study Portal",
-  "description": "AI-powered Study Portal with full-screen reading materials, video clips, MCQ testing, AI tutor, and plan & progress tracking.",
+  "name": "OM Merit Portal",
+  "description": "ICMAP M3 Organizational Management (5 Dec 2026) Merit Strategist Portal & PWA with offline OM book, past papers, Urdu voice coach, 5 daily flashcards, and 60/40 tests.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

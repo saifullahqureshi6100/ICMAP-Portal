@@ -1,9 +1,14 @@
 package com.example.ui.screens
 
+import android.app.Activity
 import android.content.Context
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.speech.RecognizerIntent
+import android.speech.tts.TextToSpeech
+import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,12 +38,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.automirrored.rounded.VolumeOff
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.AddPhotoAlternate
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Bolt
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Public
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AssistChip
@@ -55,6 +63,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -74,6 +83,7 @@ import com.example.data.FreeReferenceResult
 import com.example.data.TutorEngineMode
 import com.example.data.TutorMessage
 import com.example.viewmodel.AiTaskState
+import java.util.Locale
 import kotlin.math.max
 
 private val TutorQuickPrompts = listOf(
@@ -108,7 +118,57 @@ fun TutorScreen(
     var attachedBitmap by remember { mutableStateOf<Bitmap?>(null) }
     var showFreeLookupBar by remember { mutableStateOf(false) }
     var lookupQuery by remember { mutableStateOf("") }
+    var autoSpeakReplies by remember { mutableStateOf(false) }
+    var ttsReady by remember { mutableStateOf(false) }
+    var lastSpokenMsgId by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
+
+    val tts = remember(context) {
+        var engine: TextToSpeech? = null
+        engine = TextToSpeech(context.applicationContext) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                engine?.language = Locale.US
+                ttsReady = true
+            }
+        }
+        engine
+    }
+
+    DisposableEffect(tts) {
+        onDispose {
+            tts.stop()
+            tts.shutdown()
+        }
+    }
+
+    val speakExplanation: (String) -> Unit = { rawText ->
+        if (ttsReady) {
+            val clean = rawText
+                .replace(Regex("[#*`]+"), " ")
+                .replace(Regex("\\s+"), " ")
+                .trim()
+                .take(3500)
+            if (clean.isNotEmpty()) {
+                tts.speak(clean, TextToSpeech.QUEUE_FLUSH, null, "tutor_utterance")
+            }
+        }
+    }
+
+    val voiceLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spoken = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+                ?.trim()
+                .orEmpty()
+            if (spoken.isNotEmpty()) {
+                onSendMessage(spoken, attachedBitmap)
+                attachedBitmap = null
+            }
+        }
+    }
 
     val photoPickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
@@ -122,6 +182,16 @@ fun TutorScreen(
         val total = messages.size + if (streamingText != null) 1 else 0
         if (total > 0) {
             listState.animateScrollToItem(total - 1)
+        }
+    }
+
+    LaunchedEffect(messages.size, autoSpeakReplies, ttsReady) {
+        if (autoSpeakReplies && ttsReady) {
+            val latest = messages.lastOrNull()
+            if (latest != null && !latest.isUser && latest.id != lastSpokenMsgId) {
+                lastSpokenMsgId = latest.id
+                speakExplanation(latest.text)
+            }
         }
     }
 
@@ -179,16 +249,47 @@ fun TutorScreen(
                         }
                     }
 
-                    IconButton(
-                        onClick = onToggleFullScreen,
-                        modifier = Modifier
-                            .size(48.dp)
-                            .testTag("toggle_fullscreen_tutor_button")
-                    ) {
-                        Icon(
-                            imageVector = if (isFullScreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
-                            contentDescription = if (isFullScreen) "Exit Full-Screen Tutor" else "Full-Screen Tutor"
-                        )
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(
+                            onClick = {
+                                val next = !autoSpeakReplies
+                                autoSpeakReplies = next
+                                if (!next) tts.stop()
+                            },
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("toggle_tutor_voice_button")
+                        ) {
+                            Icon(
+                                imageVector = if (autoSpeakReplies) {
+                                    Icons.AutoMirrored.Rounded.VolumeUp
+                                } else {
+                                    Icons.AutoMirrored.Rounded.VolumeOff
+                                },
+                                contentDescription = if (autoSpeakReplies) {
+                                    "Mute spoken tutor answers"
+                                } else {
+                                    "Speak tutor answers aloud"
+                                },
+                                tint = if (autoSpeakReplies) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                }
+                            )
+                        }
+
+                        IconButton(
+                            onClick = onToggleFullScreen,
+                            modifier = Modifier
+                                .size(48.dp)
+                                .testTag("toggle_fullscreen_tutor_button")
+                        ) {
+                            Icon(
+                                imageVector = if (isFullScreen) Icons.Rounded.FullscreenExit else Icons.Rounded.Fullscreen,
+                                contentDescription = if (isFullScreen) "Exit Full-Screen Tutor" else "Full-Screen Tutor"
+                            )
+                        }
                     }
                 }
 
@@ -430,7 +531,10 @@ fun TutorScreen(
                 TutorChatBubble(
                     isUser = msg.isUser,
                     text = msg.text,
-                    hasAttachment = msg.hasAttachment
+                    hasAttachment = msg.hasAttachment,
+                    onSpeakClick = if (!msg.isUser) {
+                        { speakExplanation(msg.text) }
+                    } else null
                 )
             }
 
@@ -521,10 +625,43 @@ fun TutorScreen(
                     )
                 }
 
+                IconButton(
+                    onClick = {
+                        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                            putExtra(
+                                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+                            )
+                            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+                            putExtra(
+                                RecognizerIntent.EXTRA_PROMPT,
+                                "Ask your Study Tutor a question by voice..."
+                            )
+                        }
+                        runCatching { voiceLauncher.launch(intent) }.onFailure {
+                            Toast.makeText(
+                                context,
+                                "Voice speech recognizer not installed on this device.",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    },
+                    enabled = tutorState !is AiTaskState.Loading,
+                    modifier = Modifier
+                        .size(48.dp)
+                        .testTag("tutor_voice_mic_button")
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.Mic,
+                        contentDescription = "Ask question using voice message",
+                        tint = MaterialTheme.colorScheme.secondary
+                    )
+                }
+
                 OutlinedTextField(
                     value = inputText,
                     onValueChange = { inputText = it },
-                    placeholder = { Text("Ask your AI Tutor anything...") },
+                    placeholder = { Text("Ask or tap mic...") },
                     maxLines = 4,
                     shape = RoundedCornerShape(16.dp),
                     modifier = Modifier
@@ -564,7 +701,8 @@ private fun TutorChatBubble(
     isUser: Boolean,
     text: String,
     hasAttachment: Boolean,
-    isStreaming: Boolean = false
+    isStreaming: Boolean = false,
+    onSpeakClick: (() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier.fillMaxWidth(),
@@ -609,6 +747,24 @@ private fun TutorChatBubble(
                         MaterialTheme.colorScheme.onSurface
                     }
                 )
+                if (onSpeakClick != null && !isStreaming) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        IconButton(
+                            onClick = onSpeakClick,
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Rounded.VolumeUp,
+                                contentDescription = "Listen to tutor explanation",
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                }
                 if (isStreaming) {
                     Spacer(Modifier.height(2.dp))
                     Text(

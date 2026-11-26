@@ -34,19 +34,16 @@ class AiTutorRepository {
     private val tutorSystemInstruction = content {
         text(
             """
-            You are an expert, encouraging Socratic Study Tutor inside the Study Portal Android app.
-            You are deeply versed in the ICMA Pakistan M3 Organizational Management (ML-1) syllabus and Past Papers as well as general academic subjects:
+            You are a veteran Corporate Finance & OM Strategist (30+ years executive finance experience) and Master Teacher & Recovery Coach (50+ years teaching) guiding an executive student from ZERO preparation to win the Pakistan Certificate of Merit in ICMA M3 Organizational Management (ML-1) on 5 December 2026.
+            Deeply mastered syllabus:
             - Operations Mgmt (Units 1–7): PESTEL, ESG, Mintzberg's 5 Organizational Parts, Job/Batch/Process/Additive Manufacturing, 5S, TPM & OEE, MRP/MRP-II/ERP, OPT (Drum-Buffer-Rope), Capacity/Queuing, Quality (Juran COQ, Six Sigma DMAIC, Kaizen, Lean/Kanban, Quality Circles, TQMEX, ISO standards).
             - Human Capital Mgmt (Units 8–9): Motivation (Taylor, Maslow, Vroom, Herzberg, McGregor), Handy's Shamrock & Psychological Contract, 70-20-10 Learning, Interview Limitations (Halo effect, Contagious bias, Stereotyping), Outsourcing Recruitment, Pfeffer's 7 Practices, Kolb's Learning Cycle.
             - Marketing Mgmt (Units 10–12): Production/Product/Sales/Marketing Orientations, Sales Orientation Drawbacks, STP, 4Ps/7Ps Services Mix, BCG & Ansoff Matrices, Consumer Buying Process, DMU, CSR & Web3/DAO.
             - Performance Mgmt (Units 13–14): EPM Control Loop, CSFs vs KPIs, Budgetary Control, Balanced Scorecard (4 Perspectives & Disadvantages), Fitzgerald & Moon's Building Block Model, Lynch & Cross's Performance Pyramid.
 
-            Your capabilities include:
-            - Breaking down complex concepts step-by-step with clear headings, bullet points, and ICMA 5-mark / 10-mark exam structure.
-            - Guiding students with Socratic hints before revealing final answers when they are practicing.
-            - Turning raw notes or textbook chapters into concise summaries, flashcards, mnemonics, and worked examples.
-            - Analyzing photos of handwritten notes, textbook diagrams, or past-paper questions when attached.
-            Keep explanations focused, structured, and easy to read on mobile or full-screen study view.
+            Capabilities & Coaching Style:
+            - Bilingual Coach: Respond warmly in Roman Urdu / Urdu mixed with crisp ICMA English keywords whenever the student writes or asks in Urdu (or requests Urdu explanations), and authoritative clear English when requested.
+            - Adapt the daily office routine immediately when the student reports meetings, fatigue, or exam anxiety, offering stress recovery coaching and 5-mark/10-mark ICMA + ACCA/CIMA/ICAEW exam structures.
             """.trimIndent()
         )
     }
@@ -54,6 +51,13 @@ class AiTutorRepository {
     private val tutorModel by lazy {
         Firebase.ai.generativeModel(
             modelName = "gemini-3.8-flash",
+            systemInstruction = tutorSystemInstruction
+        )
+    }
+
+    private val tutorLiteModel by lazy {
+        Firebase.ai.generativeModel(
+            modelName = "gemini-3.5-flash-lite",
             systemInstruction = tutorSystemInstruction
         )
     }
@@ -141,10 +145,11 @@ class AiTutorRepository {
     fun streamTutorResponse(
         prompt: String,
         history: List<Content>,
-        attachedImage: Bitmap? = null
+        attachedImage: Bitmap? = null,
+        useLiteModel: Boolean = false
     ): Flow<String> = flow {
         val fullContents = buildList {
-            addAll(history)
+            addAll(history.takeLast(6))
             add(
                 content("user") {
                     if (attachedImage != null) {
@@ -154,10 +159,11 @@ class AiTutorRepository {
                 }
             )
         }
+        val activeModel = if (useLiteModel && attachedImage == null) tutorLiteModel else tutorModel
         val accumulated = StringBuilder()
         try {
             withTimeout(60_000L) {
-                tutorModel.generateContentStream(fullContents).collect { chunk ->
+                activeModel.generateContentStream(fullContents).collect { chunk ->
                     val piece = chunk.text.orEmpty()
                     if (piece.isNotEmpty()) {
                         accumulated.append(piece)
@@ -425,6 +431,47 @@ class AiTutorRepository {
         } catch (e: Exception) {
             Log.e(TAG, "Flashcard generation failed", e)
             throw e
+        }
+    }
+
+    suspend fun generateDailyBrief(plan: DailyBriefPlan, weakTopics: List<String>): String {
+        val prompt = """
+            Speak as a warm 30-Year Corporate Finance Strategist + 50-Year Master Teacher in easy Roman Urdu mixed with clear ICMA English exam keywords.
+            Student starts from ZERO preparation for the ICMA M3 Organizational Management (ML-1) exam on 5 December 2026 (${plan.daysToExam} days left).
+            Energy mode: ${plan.energyMode.label}. Weak topics queued: ${weakTopics.joinToString(", ").ifBlank { "None" }}.
+            Deliver today's energetic spoken briefing covering:
+            1) Total study hours today (${"%.1f".format(plan.totalStudyMinutes / 60.0)} hrs / ${plan.totalStudyMinutes} min)
+            2) 08:00 AM morning topic (${plan.todayTopic}) + video clip
+            3) 12:45 PM - 01:15 PM Office Lunch Break: Short Test during Office
+            4) 03:30 PM Break 2 micro-drill
+            5) 05:30 PM Home Tired Recovery: Today's 5 Flashcards only
+            6) 07:00 PM Fresh Study + 15m recovery break + 08:15 PM Test of the Day (60% MCQ / 40% Typing) + 11:30 PM rest
+            7) Advance Mock alert: ${plan.upcomingMockAlert}
+        """.trimIndent()
+        return withTimeout(60_000L) {
+            tutorLiteModel.generateContent(prompt).text?.trim() ?: plan.urduSpokenBrief
+        }
+    }
+
+    suspend fun gradeTypingAnswer(question: TypingQuestion, userAnswer: String): String {
+        val prompt = """
+            Grade this student's ${question.marks}-mark ICMA OM (ML-1) typed exam answer like a strict Pakistan Certificate of Merit examiner. Respond in warm, encouraging Roman Urdu + crisp English exam keywords.
+            Question (${question.sourceBenchmark}): ${question.question}
+            Required Keywords: ${question.keywords.joinToString(", ")}
+            Official Model Answer:
+            ${question.modelAnswer}
+
+            Student's Typed Answer:
+            $userAnswer
+
+            Provide:
+            1) Score out of ${question.marks}
+            2) What was strong vs missing keywords
+            3) 3-line Certificate of Merit improvement tip
+        """.trimIndent()
+        return withTimeout(60_000L) {
+            tutorModel.generateContent(prompt).text?.trim()
+                ?: throw IllegalStateException("AI Grader returned empty feedback.")
         }
     }
 

@@ -8,6 +8,8 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.graphics.Bitmap
 import android.net.Uri
+import android.speech.RecognizerIntent
+import android.speech.tts.TextToSpeech
 import android.view.View
 import android.view.ViewGroup
 import android.webkit.WebChromeClient
@@ -16,6 +18,8 @@ import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.FrameLayout
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -42,6 +46,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.ArrowBack
 import androidx.compose.material.icons.automirrored.rounded.OpenInNew
+import androidx.compose.material.icons.automirrored.rounded.Send
+import androidx.compose.material.icons.automirrored.rounded.VolumeUp
 import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.Close
@@ -49,6 +55,7 @@ import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.FormatSize
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.FullscreenExit
+import androidx.compose.material.icons.rounded.Mic
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.PlayCircle
@@ -58,6 +65,7 @@ import androidx.compose.material.icons.rounded.ScreenRotation
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.Style
 import androidx.compose.material.icons.rounded.Tune
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -157,6 +165,10 @@ fun FullScreenReadingViewer(
     onAskTutor: (StudyMaterial) -> Unit,
     onGenerateFlashcards: (StudyMaterial) -> Unit,
     isGeneratingFlashcards: Boolean = false,
+    readerQuickReply: String? = null,
+    readerQuickState: AiTaskState = AiTaskState.Idle,
+    onAskTeacherInReader: (StudyMaterial, String, Boolean) -> Unit = { _, _, _ -> },
+    onClearReaderQuickReply: () -> Unit = {},
     onExit: () -> Unit
 ) {
     ImmersiveSystemBarsEffect()
@@ -178,6 +190,10 @@ fun FullScreenReadingViewer(
     var showWebPreview by remember(material.id, hasUrl) { mutableStateOf(hasUrl && !hasBundledPdf) }
     var showNotesSheet by remember { mutableStateOf(false) }
     var showCustomPassageDialog by remember { mutableStateOf(false) }
+    var showUrduTeacherDialog by remember { mutableStateOf(false) }
+    var readerTeacherQuestion by remember { mutableStateOf("") }
+    var readerAnswerInUrdu by remember { mutableStateOf(true) }
+    var readerTtsReady by remember { mutableStateOf(false) }
     var customPassageSeed by remember { mutableStateOf("") }
     var hideChrome by remember { mutableStateOf(false) }
     var isLandscapeMode by remember(material.id) { mutableStateOf(false) }
@@ -187,6 +203,43 @@ fun FullScreenReadingViewer(
         mutableStateOf(progress?.personalNotes.orEmpty())
     }
     var customVideoView by remember { mutableStateOf<View?>(null) }
+
+    val readerTts = remember(context) {
+        var engine: TextToSpeech? = null
+        engine = TextToSpeech(context.applicationContext) { status ->
+            if (status == TextToSpeech.SUCCESS) {
+                val res = engine?.setLanguage(java.util.Locale("ur", "PK"))
+                if (res == TextToSpeech.LANG_MISSING_DATA || res == TextToSpeech.LANG_NOT_SUPPORTED) {
+                    engine?.language = java.util.Locale.US
+                }
+                readerTtsReady = true
+            }
+        }
+        engine
+    }
+
+    DisposableEffect(readerTts) {
+        onDispose {
+            readerTts.stop()
+            readerTts.shutdown()
+        }
+    }
+
+    val readerVoiceLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            val spoken = result.data
+                ?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
+                ?.firstOrNull()
+                ?.trim()
+                .orEmpty()
+            if (spoken.isNotEmpty()) {
+                readerTeacherQuestion = spoken
+                onAskTeacherInReader(material, spoken, readerAnswerInUrdu)
+            }
+        }
+    }
 
     fun openPassageAiHelper() {
         val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
@@ -270,14 +323,14 @@ fun FullScreenReadingViewer(
                             }
 
                             IconButton(
-                                onClick = { onAskTutor(material) },
+                                onClick = { showUrduTeacherDialog = true },
                                 modifier = Modifier
                                     .size(48.dp)
-                                    .testTag("fullscreen_ask_tutor_button")
+                                    .testTag("reader_urdu_ask_button")
                             ) {
                                 Icon(
-                                    imageVector = Icons.Rounded.AutoAwesome,
-                                    contentDescription = "Ask AI Tutor about this material",
+                                    imageVector = Icons.Rounded.Mic,
+                                    contentDescription = "Ask OM Teacher in Urdu or English Voice inside Reader",
                                     tint = if (openAsVideo) Color(0xFF2DD4BF) else MaterialTheme.colorScheme.secondary
                                 )
                             }
@@ -732,6 +785,171 @@ fun FullScreenReadingViewer(
                     onRunReaderAiAction(action, passage, null, null)
                 },
                 onDismiss = { showCustomPassageDialog = false }
+            )
+        }
+
+        if (showUrduTeacherDialog) {
+            AlertDialog(
+                onDismissRequest = { showUrduTeacherDialog = false },
+                title = { Text("Ask OM Teacher (Urdu / EN)") },
+                text = {
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.verticalScroll(rememberScrollState())
+                    ) {
+                        Text(
+                            text = "Ask any doubt on '${material.title}' without leaving your book. Use Mic or type!",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            FilterChip(
+                                selected = readerAnswerInUrdu,
+                                onClick = { readerAnswerInUrdu = true },
+                                label = { Text("Urdu + Example") }
+                            )
+                            FilterChip(
+                                selected = !readerAnswerInUrdu,
+                                onClick = { readerAnswerInUrdu = false },
+                                label = { Text("English Exam Mode") }
+                            )
+                        }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+                                        putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
+                                        putExtra(RecognizerIntent.EXTRA_LANGUAGE, if (readerAnswerInUrdu) "ur-PK" else "en-US")
+                                        putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak your OM question...")
+                                    }
+                                    runCatching { readerVoiceLauncher.launch(intent) }
+                                },
+                                modifier = Modifier.testTag("reader_mic_voice_button")
+                            ) {
+                                Icon(Icons.Rounded.Mic, contentDescription = "Voice Mic", modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Voice Mic")
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    readerTeacherQuestion = "Isko asaan Urdu aur practical example se samjha dein"
+                                    onAskTeacherInReader(material, readerTeacherQuestion, true)
+                                }
+                            ) {
+                                Text("Explain Urdu")
+                            }
+                        }
+                        OutlinedTextField(
+                            value = readerTeacherQuestion,
+                            onValueChange = { readerTeacherQuestion = it },
+                            label = { Text("Your Question") },
+                            minLines = 2,
+                            maxLines = 4,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .testTag("reader_urdu_question_input")
+                        )
+                        if (readerQuickState is AiTaskState.Loading) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                androidx.compose.material3.CircularProgressIndicator(
+                                    modifier = Modifier.size(18.dp),
+                                    strokeWidth = 2.dp
+                                )
+                                Text("50-Yr Teacher is answering...", style = MaterialTheme.typography.labelSmall)
+                            }
+                        } else if (readerQuickState is AiTaskState.Error) {
+                            Text(
+                                text = readerQuickState.message,
+                                color = MaterialTheme.colorScheme.error,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                        if (!readerQuickReply.isNullOrBlank()) {
+                            Surface(
+                                shape = RoundedCornerShape(12.dp),
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                                ) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(
+                                            text = "Teacher Reply",
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.secondary
+                                        )
+                                        OutlinedButton(
+                                            onClick = {
+                                                if (readerTtsReady) {
+                                                    readerTts.speak(
+                                                        readerQuickReply.replace(Regex("[#*`]+"), " ").take(3200),
+                                                        TextToSpeech.QUEUE_FLUSH,
+                                                        null,
+                                                        "reader_teacher_reply"
+                                                    )
+                                                }
+                                            },
+                                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp)
+                                        ) {
+                                            Icon(Icons.AutoMirrored.Rounded.VolumeUp, contentDescription = "Speak answer", modifier = Modifier.size(14.dp))
+                                            Spacer(Modifier.width(4.dp))
+                                            Text("Listen", style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
+                                    Text(
+                                        text = readerQuickReply,
+                                        style = MaterialTheme.typography.bodySmall
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            if (readerTeacherQuestion.isNotBlank()) {
+                                onAskTeacherInReader(material, readerTeacherQuestion, readerAnswerInUrdu)
+                            }
+                        },
+                        enabled = readerQuickState !is AiTaskState.Loading && readerTeacherQuestion.isNotBlank(),
+                        modifier = Modifier.testTag("reader_send_question_button")
+                    ) {
+                        Icon(Icons.AutoMirrored.Rounded.Send, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Ask")
+                    }
+                },
+                dismissButton = {
+                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        TextButton(onClick = {
+                            showUrduTeacherDialog = false
+                            onAskTutor(material)
+                        }) {
+                            Text("Full Tutor")
+                        }
+                        TextButton(onClick = {
+                            readerTts.stop()
+                            onClearReaderQuickReply()
+                            showUrduTeacherDialog = false
+                        }) {
+                            Text("Close")
+                        }
+                    }
+                }
             )
         }
 

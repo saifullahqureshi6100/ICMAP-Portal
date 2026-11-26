@@ -3,7 +3,6 @@ import {
   BarChart3,
   BookOpen,
   Brain,
-  Calculator,
   CalendarDays,
   CheckCircle2,
   ChevronRight,
@@ -16,12 +15,11 @@ import {
   Layers,
   Maximize2,
   Menu,
+  Mic,
   Minimize2,
-  PenLine,
   Play,
   Search,
   Send,
-  Sparkles,
   Target,
   Upload,
   Video,
@@ -37,6 +35,8 @@ import {
   XAxis,
   YAxis
 } from 'recharts';
+import { DailyBriefAndCoach } from './components/DailyBriefAndCoach';
+import { DailyTestsArena } from './components/DailyTestsArena';
 import { FlashcardDeck } from './components/FlashcardDeck';
 import { PdfAndReaderView } from './components/PdfAndReaderView';
 import { PomodoroTimer } from './components/PomodoroTimer';
@@ -48,13 +48,20 @@ import {
   SUBJECTS
 } from './data/icmapData';
 import {
+  buildDailyBriefPlan,
+  selectTodayFiveFlashcards
+} from './data/strategistEngine';
+import {
   callFreeAiTutor,
   fetchDictionaryWord,
   fetchWikipediaConcept,
-  parseMcqArrayFromAi
+  parseMcqArrayFromAi,
+  parseTypingQuestionsFromAi
 } from './lib/freeAiClient';
 import {
   AiEngineMode,
+  DailyBriefPlan,
+  DailyRoutineSlot,
   FlashcardItem,
   FreeReferenceItem,
   McqQuestionItem,
@@ -63,23 +70,17 @@ import {
   RoadmapMilestone,
   StudyMaterialItem,
   SubjectInfo,
+  TestAttemptSummary,
+  TestModeKind,
   TutorChatItem,
   TutorLang,
+  TypingQuestionItem,
   UploadedLocalMaterial
 } from './types';
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
   userChoice: Promise<{ outcome: 'accepted' | 'dismissed' }>;
-}
-
-function speakText(text: string, lang: TutorLang) {
-  if (typeof window === 'undefined' || !window.speechSynthesis) return;
-  window.speechSynthesis.cancel();
-  const utterance = new SpeechSynthesisUtterance(String(text).slice(0, 1400));
-  utterance.lang = lang === 'ur' ? 'ur-PK' : 'en-US';
-  utterance.rate = 0.94;
-  window.speechSynthesis.speak(utterance);
 }
 
 function loadStored<T>(key: string, fallback: T): T {
@@ -104,9 +105,36 @@ export default function App() {
   const [subject, setSubject] = useState<SubjectInfo>(SUBJECTS[0]);
   const [topic, setTopic] = useState<string>(SUBJECTS[0].weak[0]);
   const [selectedMaterial, setSelectedMaterial] = useState<StudyMaterialItem>(STUDY_MATERIALS[0]);
-  const [lang, setLang] = useState<TutorLang>('en');
-  const [voiceEnabled, setVoiceEnabled] = useState(false);
+  const [lang, setLang] = useState<TutorLang>('ur');
+  const [voiceEnabled, setVoiceEnabled] = useState(true);
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [engineMode, setEngineMode] = useState<AiEngineMode>('auto_free');
+
+  // Master Strategist Adaptive State
+  const [weakTopics, setWeakTopics] = useState<string[]>(() =>
+    loadStored('icmap_weak_topics', SUBJECTS[0].weak)
+  );
+  const [energyMode, setEnergyMode] = useState<DailyBriefPlan['energyMode']>(() =>
+    loadStored('icmap_energy_mode', 'normal')
+  );
+  const [completedSlotIds, setCompletedSlotIds] = useState<string[]>(() =>
+    loadStored('icmap_daily_slots_done', [])
+  );
+  const [testHistory, setTestHistory] = useState<TestAttemptSummary[]>(() =>
+    loadStored('icmap_test_history', [])
+  );
+  const [preferredTestMode, setPreferredTestMode] = useState<TestModeKind>('daily_test');
+  const [defaultTodayFiveCards, setDefaultTodayFiveCards] = useState(true);
+
+  const dailyPlan = useMemo(
+    () =>
+      buildDailyBriefPlan({
+        weakTopics,
+        energyMode,
+        completedSlotIds
+      }),
+    [weakTopics, energyMode, completedSlotIds]
+  );
 
   // Full-screen & PWA install state
   const [isFullScreen, setIsFullScreen] = useState(false);
@@ -145,32 +173,34 @@ export default function App() {
     {
       id: 'welcome',
       role: 'tutor',
-      text: 'Welcome to ICMAP Smart Tutor PWA! Ask me anything on M3 Organizational Management, Past Papers, Accounting, or Taxation — works free with zero API key required.',
-      provider: 'Free AI Ready'
+      text: `Assalam-o-Alaikum Beta! Main aapka 30-Year Finance Strategist aur 50-Year Master Teacher hoon. 5 December 2026 OM exam mein ${dailyPlan.daysToExam} din baqi hain — zero preparation se Pakistan Certificate of Merit tak! Upar "Brief of the Day (Urdu)" dabaein ya apni office meeting, thakan, ya kisi bhi OM topic par Urdu mein sawal karein!`,
+      provider: 'Groq + Free AI Master Strategist'
     }
   ]);
   const [busy, setBusy] = useState(false);
+  const [listeningVoice, setListeningVoice] = useState(false);
   const [tutorError, setTutorError] = useState('');
   const [refQuery, setRefQuery] = useState('');
   const [refResult, setRefResult] = useState<FreeReferenceItem | null>(null);
   const [refBusy, setRefBusy] = useState(false);
   const [refError, setRefError] = useState('');
 
-  // Quizzes & Flashcards
-  const [quiz, setQuiz] = useState<McqQuestionItem[]>(OM_MCQ_QUESTIONS);
-  const [qi, setQi] = useState(0);
-  const [selectedAnswers, setSelectedAnswers] = useState<Record<number, number>>({});
-  const [quizDone, setQuizDone] = useState(false);
+  // Flashcards
   const [flashcards, setFlashcards] = useState<FlashcardItem[]>(() =>
     loadStored('icmap_flashcards', STARTER_FLASHCARDS)
   );
   const [generatingCards, setGeneratingCards] = useState(false);
 
+  const todayFiveCardIds = useMemo(
+    () => selectTodayFiveFlashcards(flashcards, weakTopics).map((c) => c.id),
+    [flashcards, weakTopics]
+  );
+
   // Videos & Materials
   const [videos, setVideos] = useState<
     Array<{ id: string; title: string; channel: string; thumbnail: string }>
   >([]);
-  const [videoQuery, setVideoQuery] = useState('Balanced Scorecard Mintzberg ICMA OM');
+  const [videoQuery, setVideoQuery] = useState(dailyPlan.todayVideoQuery);
   const [uploadedMaterials, setUploadedMaterials] = useState<UploadedLocalMaterial[]>(() =>
     loadStored('icmap_uploaded_files', [])
   );
@@ -180,9 +210,8 @@ export default function App() {
   const [toastMsg, setToastMsg] = useState('');
 
   useEffect(() => {
-    setTopic(subject.weak[0] || 'Core Concepts');
-    setVideoQuery(subject.weak[0] || subject.name);
-  }, [subject]);
+    setTopic(weakTopics[0] || subject.weak[0] || 'Core Concepts');
+  }, [subject, weakTopics]);
 
   useEffect(() => {
     const mq = window.matchMedia('(display-mode: standalone)');
@@ -205,19 +234,40 @@ export default function App() {
     };
   }, []);
 
+  function speakText(text: string, targetLang: TutorLang) {
+    if (typeof window === 'undefined' || !window.speechSynthesis) return;
+    window.speechSynthesis.cancel();
+    const clean = String(text)
+      .replace(/[#*`]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 1800);
+    if (!clean) return;
+    const utterance = new SpeechSynthesisUtterance(clean);
+    utterance.lang = targetLang === 'ur' ? 'ur-PK' : 'en-US';
+    utterance.rate = 0.94;
+    utterance.onstart = () => setIsSpeaking(true);
+    utterance.onend = () => setIsSpeaking(false);
+    utterance.onerror = () => setIsSpeaking(false);
+    setIsSpeaking(true);
+    window.speechSynthesis.speak(utterance);
+  }
+
+  function stopSpeech() {
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeaking(false);
+  }
+
   const overall = useMemo(
     () => Math.round(SUBJECTS.reduce((acc, s) => acc + s.progress, 0) / SUBJECTS.length),
     []
   );
 
-  const quizCorrectCount = useMemo(
-    () => quiz.filter((q, idx) => selectedAnswers[idx] === q.answer).length,
-    [quiz, selectedAnswers]
-  );
-
   function showToast(msg: string) {
     setToastMsg(msg);
-    window.setTimeout(() => setToastMsg((cur) => (cur === msg ? '' : cur)), 3400);
+    window.setTimeout(() => setToastMsg((cur) => (cur === msg ? '' : cur)), 3600);
   }
 
   async function toggleFullScreen(target: 'active' | 'pomodoro' | 'roadmap' = 'active') {
@@ -256,6 +306,35 @@ export default function App() {
     }
   }
 
+  function startVoiceQuestion() {
+    const SpeechRec =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) {
+      showToast('Voice recognition works best in Chrome or Edge.');
+      return;
+    }
+    const recognition = new SpeechRec();
+    recognition.lang = lang === 'ur' ? 'ur-PK' : 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    setListeningVoice(true);
+    recognition.onresult = (event: any) => {
+      const spoken = String(event?.results?.[0]?.[0]?.transcript || '').trim();
+      setListeningVoice(false);
+      if (spoken) {
+        void askTutor(spoken);
+      }
+    };
+    recognition.onerror = () => {
+      setListeningVoice(false);
+      showToast('Could not capture voice. Check microphone permission.');
+    };
+    recognition.onend = () => {
+      setListeningVoice(false);
+    };
+    recognition.start();
+  }
+
   async function askTutor(customPrompt?: string) {
     const q = (customPrompt ?? question).trim();
     if (!q || busy) return;
@@ -264,13 +343,23 @@ export default function App() {
     if (!customPrompt) setQuestion('');
     setBusy(true);
     try {
+      // Detect fatigue / meeting intent to adapt today's routine dynamically
+      const lower = q.toLowerCase();
+      if (lower.includes('meeting') || lower.includes('busy')) {
+        setEnergyMode('busy_office');
+        saveStored('icmap_energy_mode', 'busy_office');
+      } else if (lower.includes('tired') || lower.includes('thak') || lower.includes('tension') || lower.includes('stress')) {
+        setEnergyMode('low_recovery');
+        saveStored('icmap_energy_mode', 'low_recovery');
+      }
+
       const res = await callFreeAiTutor({
         action: 'chat',
         subject: subject.code,
-        topic,
+        topic: `${topic} | Days to 5 Dec 2026 Exam: ${dailyPlan.daysToExam} | Weak Topics: ${weakTopics.join(', ')}`,
         question: q,
         language: lang,
-        context: `${selectedMaterial.title}\n${uploadedMaterials.map((m) => m.name).join(', ')}`,
+        context: `${selectedMaterial.title}\nCurrent Weak Areas: ${weakTopics.join(', ')}`,
         engineMode
       });
       setChat((prev) => [
@@ -279,10 +368,24 @@ export default function App() {
       ]);
       if (voiceEnabled) speakText(res.text, lang);
     } catch (e: any) {
-      setTutorError(e?.message || 'Could not reach free AI endpoint.');
+      setTutorError(e?.message || 'Could not reach AI endpoint.');
     } finally {
       setBusy(false);
     }
+  }
+
+  async function generateAiDailyBrief(): Promise<string> {
+    const res = await callFreeAiTutor({
+      action: 'daily_brief',
+      subject: 'ICMA M3 Organizational Management (ML-1)',
+      topic: dailyPlan.todayTopic,
+      language: 'ur',
+      context: `Days left before 5 Dec 2026: ${dailyPlan.daysToExam}. Starting from zero preparation. Weak Topics: ${weakTopics.join(
+        ', '
+      )}. Energy mode: ${energyMode}. Total planned minutes today: ${dailyPlan.totalStudyMinutes}.`,
+      engineMode
+    });
+    return res.text;
   }
 
   async function runSelectionAi(
@@ -301,88 +404,130 @@ export default function App() {
     return res.text;
   }
 
-  async function generateContent(
-    action: 'mcq' | 'numerical' | 'typing' | 'flashcards' | 'plan',
-    sourceContext?: string
-  ) {
+  async function askTeacherInsideReader(
+    userQ: string,
+    material: StudyMaterialItem,
+    inUrdu: boolean
+  ): Promise<string> {
+    const res = await callFreeAiTutor({
+      action: 'chat',
+      subject: 'ICMA M3 OM',
+      topic: material.title,
+      question: userQ,
+      language: inUrdu ? 'ur' : 'en',
+      context: `Material: ${material.title}\nExcerpt:\n${material.readingContent.slice(0, 2200)}`,
+      engineMode
+    });
+    return res.text;
+  }
+
+  async function lookupWebConceptSummary(query: string): Promise<string> {
+    const res = await fetchWikipediaConcept(query);
+    return `${res.title} (${res.subtitle}): ${res.summary}`;
+  }
+
+  async function generateAiTest(
+    action: 'mcq' | 'numerical' | 'typing',
+    targetTopic: string,
+    count: number
+  ): Promise<{ mcqs: McqQuestionItem[]; typing: TypingQuestionItem[] }> {
     setBusy(true);
-    if (action === 'flashcards') setGeneratingCards(true);
-    setTutorError('');
     try {
       const res = await callFreeAiTutor({
         action,
+        subject: 'ICMA M3 OM / ACCA / CIMA / ICAEW',
+        topic: targetTopic,
+        count,
+        language: 'en',
+        context: selectedMaterial.readingContent,
+        engineMode
+      });
+      if (action === 'typing') {
+        const typing = parseTypingQuestionsFromAi(res.parsed, targetTopic);
+        return { mcqs: [], typing };
+      }
+      const mcqs = parseMcqArrayFromAi(res.parsed, `ai_${action}`, targetTopic);
+      return { mcqs, typing: [] };
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function gradeTypedAnswer(
+    questionItem: TypingQuestionItem,
+    userAnswer: string
+  ): Promise<string> {
+    const res = await callFreeAiTutor({
+      action: 'grade_typing',
+      subject: 'ICMA M3 OM (ML-1)',
+      topic: questionItem.topicTag,
+      language: lang,
+      context: `Exam Question (${questionItem.marks} Marks): ${questionItem.question}\nModel Answer Keywords: ${questionItem.keywords.join(
+        ', '
+      )}\nOfficial Suggested Answer:\n${questionItem.modelAnswer}\n\nStudent Typed Answer:\n${userAnswer}`,
+      engineMode
+    });
+    return res.text;
+  }
+
+  function handleTestCompleted(summary: TestAttemptSummary) {
+    const nextHistory = [summary, ...testHistory].slice(0, 30);
+    setTestHistory(nextHistory);
+    saveStored('icmap_test_history', nextHistory);
+
+    if (summary.weakTopicsDetected.length > 0) {
+      const mergedWeak = Array.from(
+        new Set([...summary.weakTopicsDetected, ...weakTopics])
+      ).slice(0, 8);
+      setWeakTopics(mergedWeak);
+      saveStored('icmap_weak_topics', mergedWeak);
+      showToast(
+        `Plan updated! Added revision for: ${summary.weakTopicsDetected.join(', ')}`
+      );
+    } else {
+      showToast('Strong Merit Score! Moving forward on your 5 Dec 2026 roadmap.');
+    }
+  }
+
+  async function generateFlashcardsContent(sourceContext?: string, count = 5) {
+    setBusy(true);
+    setGeneratingCards(true);
+    try {
+      const res = await callFreeAiTutor({
+        action: 'flashcards',
         subject: subject.code,
-        topic,
-        count: 6,
-        language: lang,
+        topic: `${topic} (Weak areas: ${weakTopics.slice(0, 3).join(', ')})`,
+        count,
+        language: 'en',
         context: sourceContext || selectedMaterial.readingContent,
         engineMode
       });
-
-      if (action === 'mcq' || action === 'numerical') {
-        const parsedQuestions = parseMcqArrayFromAi(res.parsed, `ai_${action}`);
-        if (parsedQuestions.length > 0) {
-          setQuiz(parsedQuestions);
-          setQi(0);
-          setSelectedAnswers({});
-          setQuizDone(false);
-          setTab('tests');
-          showToast(`Generated ${parsedQuestions.length} ${action.toUpperCase()} questions!`);
-        } else {
-          setChat((prev) => [
-            ...prev,
-            { id: `t_${Date.now()}`, role: 'tutor', text: res.text, provider: res.provider }
-          ]);
-          setTab('tutor');
-        }
-      } else if (action === 'flashcards') {
-        const rawCards = Array.isArray(res.parsed?.cards) ? res.parsed.cards : [];
-        const created: FlashcardItem[] = rawCards
-          .filter((c: any) => c?.front && c?.back)
-          .map((c: any, i: number) => ({
-            id: `ai_fc_${Date.now()}_${i}`,
-            deck: selectedMaterial.title,
-            front: String(c.front).trim(),
-            back: String(c.back).trim(),
-            hint: c.hint ? String(c.hint).trim() : '',
-            mastered: false,
-            reviewCount: 0
-          }));
-        if (created.length > 0) {
-          const updated = [...created, ...flashcards];
-          setFlashcards(updated);
-          saveStored('icmap_flashcards', updated);
-          setTab('flashcards');
-          showToast(`Created ${created.length} AI flashcards from ${selectedMaterial.title}!`);
-        } else {
-          throw new Error('Could not parse AI flashcard JSON. Please try again.');
-        }
-      } else if (action === 'plan') {
-        const sessions = Array.isArray(res.parsed?.sessions) ? res.parsed.sessions : [];
-        const planText = sessions.length
-          ? `Adaptive Study Plan (${topic}):\n` +
-            sessions
-              .map(
-                (s: any, idx: number) =>
-                  `${idx + 1}. ${s.title} (${s.minutes || 35}m) — ${s.task}`
-              )
-              .join('\n')
-          : res.text;
-        setChat((prev) => [
-          ...prev,
-          { id: `p_${Date.now()}`, role: 'tutor', text: planText, provider: res.provider }
-        ]);
-        setTab('tutor');
+      const rawCards = Array.isArray(res.parsed?.cards) ? res.parsed.cards : [];
+      const created: FlashcardItem[] = rawCards
+        .filter((c: any) => c?.front && c?.back)
+        .map((c: any, i: number) => ({
+          id: `ai_fc_${Date.now()}_${i}`,
+          deck: selectedMaterial.title,
+          topicTag: topic,
+          dayOffsetTag: 0,
+          front: String(c.front).trim(),
+          back: String(c.back).trim(),
+          hint: c.hint ? String(c.hint).trim() : '',
+          mastered: false,
+          reviewCount: 0
+        }));
+      if (created.length > 0) {
+        const updated = [...created, ...flashcards];
+        setFlashcards(updated);
+        saveStored('icmap_flashcards', updated);
+        setDefaultTodayFiveCards(true);
+        setTab('flashcards');
+        showToast(`Created ${created.length} daily flashcards!`);
       } else {
-        setChat((prev) => [
-          ...prev,
-          { id: `ty_${Date.now()}`, role: 'tutor', text: res.text, provider: res.provider }
-        ]);
-        setTab('tutor');
+        throw new Error('Could not parse AI flashcard JSON. Please try again.');
       }
     } catch (e: any) {
-      setTutorError(e?.message || 'AI generation failed.');
-      showToast(e?.message || 'AI generation failed.');
+      showToast(e?.message || 'Could not generate flashcards.');
     } finally {
       setBusy(false);
       setGeneratingCards(false);
@@ -406,10 +551,13 @@ export default function App() {
     }
   }
 
-  async function findVideos() {
+  async function findVideos(overrideQuery?: string) {
+    const q = (overrideQuery ?? videoQuery).trim();
+    if (!q) return;
+    setVideoQuery(q);
     setBusy(true);
     try {
-      const r = await fetch(`/api/youtube?q=${encodeURIComponent(videoQuery)}`);
+      const r = await fetch(`/api/youtube?q=${encodeURIComponent(q)}`);
       if (r.ok) {
         const d = await r.json();
         setVideos(d.items || []);
@@ -419,14 +567,36 @@ export default function App() {
         return;
       }
     } catch {
-      // Static fallback opens clean YouTube search directly
+      // Fallback launches direct YouTube topic search
     } finally {
       setBusy(false);
     }
     window.open(
-      `https://www.youtube.com/results?search_query=${encodeURIComponent(videoQuery)}`,
+      `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`,
       '_blank'
     );
+  }
+
+  function handleLaunchRoutineAction(
+    actionType: DailyRoutineSlot['actionType'],
+    topicFocus: string
+  ) {
+    setTopic(topicFocus);
+    if (actionType === 'read_video') {
+      setSelectedMaterial(
+        topicFocus.toLowerCase().includes('past') ? STUDY_MATERIALS[1] : STUDY_MATERIALS[0]
+      );
+      setTab('read');
+    } else if (actionType === 'office_short_test') {
+      setPreferredTestMode('office_short');
+      setTab('tests');
+    } else if (actionType === 'daily_test') {
+      setPreferredTestMode('daily_test');
+      setTab('tests');
+    } else if (actionType === 'flashcards') {
+      setDefaultTodayFiveCards(true);
+      setTab('flashcards');
+    }
   }
 
   function handleMarkRead(materialId: string) {
@@ -473,6 +643,8 @@ export default function App() {
     const card: FlashcardItem = {
       id: `custom_${Date.now()}`,
       deck,
+      topicTag: topic,
+      dayOffsetTag: 0,
       front,
       back,
       hint,
@@ -507,9 +679,9 @@ export default function App() {
   const navItems: Array<[PortalTab, string, React.ComponentType<any>]> = [
     ['home', 'Dashboard', BarChart3],
     ['read', 'Read & PDF', BookOpen],
-    ['flashcards', 'Flashcards', Layers],
-    ['tests', 'MCQs', CheckCircle2],
-    ['tutor', 'AI Tutor', Brain],
+    ['flashcards', '5 Daily Cards', Layers],
+    ['tests', 'Daily Tests', CheckCircle2],
+    ['tutor', 'Urdu Coach', Brain],
     ['videos', 'Videos', Video],
     ['materials', 'Materials', FileText],
     ['past', 'Past Papers', GraduationCap]
@@ -574,189 +746,68 @@ export default function App() {
               onMarkRead={handleMarkRead}
               onSaveNotes={handleSaveNotes}
               onRunSelectionAi={runSelectionAi}
+              onAskTeacherInsideReader={askTeacherInsideReader}
+              onLookupWebConcept={lookupWebConceptSummary}
+              onSpeakText={speakText}
               onSendToTutor={(prompt, reply) => {
                 setChat((prev) => [
                   ...prev,
                   { id: `u_${Date.now()}`, role: 'user', text: prompt },
-                  { id: `t_${Date.now() + 1}`, role: 'tutor', text: reply, provider: 'Selection AI' }
+                  { id: `t_${Date.now() + 1}`, role: 'tutor', text: reply, provider: 'Reader AI' }
                 ]);
                 setTab('tutor');
               }}
               onGenerateFlashcards={(matId) => {
                 const mat = STUDY_MATERIALS.find((m) => m.id === matId);
                 if (mat) setSelectedMaterial(mat);
-                generateContent('flashcards', mat?.readingContent);
+                void generateFlashcardsContent(mat?.readingContent, 5);
               }}
               onLaunchQuiz={(t) => {
                 setTopic(t);
+                setPreferredTestMode('office_short');
                 setTab('tests');
               }}
               videoQuery={videoQuery}
               onChangeVideoQuery={setVideoQuery}
               videos={videos}
-              onFindVideos={findVideos}
+              onFindVideos={() => void findVideos()}
               isFullScreen
               onToggleFullScreen={() => toggleFullScreen()}
             />
           ) : tab === 'flashcards' ? (
             <FlashcardDeck
               cards={flashcards}
+              todayFiveCardIds={todayFiveCardIds}
+              defaultTodayFiveMode={defaultTodayFiveCards}
               onRecordReview={handleFlashcardReview}
               onAddCustomCard={handleAddCustomCard}
               onDeleteCard={handleDeleteCard}
               onGenerateFromMaterial={async (matId, count) => {
                 const mat = STUDY_MATERIALS.find((m) => m.id === matId);
                 if (mat) setSelectedMaterial(mat);
-                await generateContent('flashcards', mat?.readingContent);
-                void count;
+                await generateFlashcardsContent(mat?.readingContent, count);
               }}
               isGenerating={generatingCards}
               isFullScreen
               onToggleFullScreen={() => toggleFullScreen()}
             />
           ) : tab === 'tests' ? (
-            renderTestsPanel()
+            <DailyTestsArena
+              weakTopics={weakTopics}
+              recentAttempts={testHistory}
+              initialMode={preferredTestMode}
+              lang={lang}
+              isFullScreen
+              onToggleFullScreen={() => toggleFullScreen()}
+              onGenerateAiTest={generateAiTest}
+              onGradeTypedAnswer={gradeTypedAnswer}
+              onSpeakText={speakText}
+              onTestCompleted={handleTestCompleted}
+            />
           ) : (
             renderTutorPanel()
           )}
         </div>
-      </div>
-    );
-  }
-
-  function renderTestsPanel() {
-    return (
-      <div className="glass rounded-3xl p-5 md:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div>
-            <div className="text-xs text-cyan-300 uppercase tracking-widest font-semibold">
-              ICMA Active Test Arena
-            </div>
-            <h2 className="text-xl md:text-2xl font-bold mt-1">
-              {quizDone
-                ? `Test Complete: ${quizCorrectCount} / ${quiz.length}`
-                : quiz[qi]?.question}
-            </h2>
-          </div>
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => {
-                setQuiz(OM_MCQ_QUESTIONS);
-                setQi(0);
-                setSelectedAnswers({});
-                setQuizDone(false);
-              }}
-              className="glass px-3 py-2 rounded-xl text-xs min-h-[40px]"
-            >
-              OM Bank (12)
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => generateContent('mcq')}
-              className="px-3 py-2 rounded-xl bg-cyan-500/20 text-cyan-100 text-xs font-semibold min-h-[40px]"
-            >
-              AI MCQs
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => generateContent('numerical')}
-              className="glass px-3 py-2 rounded-xl text-xs min-h-[40px]"
-            >
-              <Calculator size={13} className="inline mr-1" /> Numericals
-            </button>
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => generateContent('typing')}
-              className="glass px-3 py-2 rounded-xl text-xs min-h-[40px]"
-            >
-              <PenLine size={13} className="inline mr-1" /> 5-Mark Drill
-            </button>
-            <button
-              type="button"
-              onClick={() => toggleFullScreen('active')}
-              aria-label="Toggle full-screen quiz"
-              className="glass p-2.5 rounded-xl min-w-[40px] min-h-[40px]"
-            >
-              {isFullScreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-            </button>
-          </div>
-        </div>
-
-        {quizDone ? (
-          <div className="py-10 space-y-5">
-            <div className="text-center">
-              <CheckCircle2 size={52} className="mx-auto text-emerald-300" />
-              <div className="text-3xl font-extrabold mt-3">
-                {quizCorrectCount} / {quiz.length} (
-                {quiz.length ? Math.round((quizCorrectCount / quiz.length) * 100) : 0}%)
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setQi(0);
-                  setSelectedAnswers({});
-                  setQuizDone(false);
-                }}
-                className="mt-4 px-5 py-2.5 rounded-xl bg-cyan-500/25 text-cyan-100 text-xs font-semibold"
-              >
-                Retake Quiz
-              </button>
-            </div>
-            <div className="space-y-3">
-              {quiz.map((q, idx) => {
-                const picked = selectedAnswers[idx];
-                const isRight = picked === q.answer;
-                return (
-                  <div
-                    key={q.id}
-                    className={`p-4 rounded-2xl border text-xs space-y-1.5 ${
-                      isRight
-                        ? 'bg-emerald-500/10 border-emerald-400/25'
-                        : 'bg-rose-500/10 border-rose-400/25'
-                    }`}
-                  >
-                    <div className="font-bold text-sm">
-                      {idx + 1}. {q.question}
-                    </div>
-                    <div className="text-slate-300">
-                      Correct: <span className="text-emerald-200">{q.options[q.answer]}</span>
-                    </div>
-                    <div className="text-slate-400">{q.explanation}</div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        ) : (
-          <div className="mt-6">
-            <div className="text-xs text-slate-400 mb-3">
-              Question {qi + 1} / {quiz.length}
-            </div>
-            <div className="grid gap-3">
-              {(quiz[qi]?.options || []).map((opt, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => {
-                    setSelectedAnswers((prev) => ({ ...prev, [qi]: idx }));
-                    if (qi + 1 < quiz.length) {
-                      setQi(qi + 1);
-                    } else {
-                      setQuizDone(true);
-                    }
-                  }}
-                  className="text-left p-4 rounded-xl bg-white/5 hover:bg-cyan-400/12 border border-white/10 transition min-h-[48px]"
-                >
-                  <b>{String.fromCharCode(65 + idx)}.</b> {opt}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
     );
   }
@@ -768,9 +819,9 @@ export default function App() {
           <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
             <div>
               <div className="text-xs text-cyan-300 uppercase font-semibold">
-                $0 Free AI Study Tutor
+                30-Yr Strategist + 50-Yr OM Master Teacher (Groq + Zero-Key Failover)
               </div>
-              <h2 className="text-xl font-bold">Ask Tutor</h2>
+              <h2 className="text-xl font-bold">Urdu Voice Mentor & Doubt Solver</h2>
             </div>
             <div className="flex items-center gap-2">
               <button
@@ -783,7 +834,7 @@ export default function App() {
                 className="px-3 py-1.5 rounded-xl bg-cyan-500/15 text-cyan-100 text-xs font-medium"
               >
                 {engineMode === 'auto_free'
-                  ? 'Auto Free AI ($0)'
+                  ? 'Groq + Auto Failover'
                   : 'Pollinations Direct ($0)'}
               </button>
               <button
@@ -791,7 +842,7 @@ export default function App() {
                 onClick={() => {
                   const next = !voiceEnabled;
                   setVoiceEnabled(next);
-                  if (!next && window.speechSynthesis) window.speechSynthesis.cancel();
+                  if (!next) stopSpeech();
                 }}
                 aria-label="Toggle voice readout"
                 className="p-2.5 rounded-xl bg-white/5"
@@ -818,8 +869,20 @@ export default function App() {
                 }`}
               >
                 <div className="text-[10px] uppercase text-slate-400 flex items-center justify-between gap-3">
-                  <span>{m.role === 'user' ? 'You' : 'Tutor'}</span>
-                  {m.provider && <span className="text-cyan-300">{m.provider}</span>}
+                  <span>{m.role === 'user' ? 'You' : 'Ustad & Strategist'}</span>
+                  <div className="flex items-center gap-2">
+                    {m.provider && <span className="text-cyan-300">{m.provider}</span>}
+                    {m.role === 'tutor' && (
+                      <button
+                        type="button"
+                        onClick={() => speakText(m.text, lang)}
+                        aria-label="Listen to tutor answer"
+                        className="text-cyan-200 hover:text-white inline-flex items-center gap-1"
+                      >
+                        <Volume2 size={12} /> Listen
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <div className="whitespace-pre-wrap text-sm leading-6 mt-1">{m.text}</div>
               </div>
@@ -833,17 +896,34 @@ export default function App() {
           )}
 
           <div className="flex gap-2 mt-4">
+            <button
+              type="button"
+              disabled={busy}
+              onClick={startVoiceQuestion}
+              aria-label="Record voice message question"
+              className={`px-3.5 rounded-xl min-w-[48px] flex items-center justify-center transition ${
+                listeningVoice
+                  ? 'bg-rose-500/35 text-rose-100 animate-pulse'
+                  : 'bg-violet-500/20 hover:bg-violet-500/30 text-violet-100'
+              }`}
+            >
+              <Mic size={17} />
+            </button>
             <input
               value={question}
               onChange={(e) => setQuestion(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && askTutor()}
-              placeholder="Ask anything on OM M3, Past Papers, FACR, or BT..."
+              onKeyDown={(e) => e.key === 'Enter' && void askTutor()}
+              placeholder={
+                listeningVoice
+                  ? 'Sun raha hoon — Urdu ya English mein boliyeh...'
+                  : 'Ask in Urdu/English by typing or tap Mic...'
+              }
               className="flex-1 bg-black/25 border border-white/10 rounded-xl px-4 py-3 text-sm"
             />
             <button
               type="button"
               disabled={busy}
-              onClick={() => askTutor()}
+              onClick={() => void askTutor()}
               className="px-4 rounded-xl bg-cyan-500/25 hover:bg-cyan-500/35 min-w-[48px] flex items-center justify-center"
             >
               <Send size={17} />
@@ -855,7 +935,7 @@ export default function App() {
         <div className="space-y-4">
           <div className="glass rounded-3xl p-4 space-y-3">
             <div className="text-xs uppercase tracking-wider text-cyan-300 font-semibold flex items-center gap-1.5">
-              <Globe size={14} /> Free Wiki & Dictionary ($0 • No Key)
+              <Globe size={14} /> Free Web & Dictionary ($0)
             </div>
             <div className="flex gap-2">
               <input
@@ -869,15 +949,15 @@ export default function App() {
               <button
                 type="button"
                 disabled={refBusy || !refQuery.trim()}
-                onClick={() => runFreeLookup('wiki')}
+                onClick={() => void runFreeLookup('wiki')}
                 className="py-2 px-2.5 rounded-xl bg-cyan-500/20 text-cyan-100 text-xs font-semibold flex items-center justify-center gap-1"
               >
-                <Search size={13} /> Wiki Concept
+                <Search size={13} /> Web Concept
               </button>
               <button
                 type="button"
                 disabled={refBusy || !refQuery.trim()}
-                onClick={() => runFreeLookup('dict')}
+                onClick={() => void runFreeLookup('dict')}
                 className="py-2 px-2.5 rounded-xl bg-violet-500/20 text-violet-100 text-xs font-semibold flex items-center justify-center gap-1"
               >
                 <BookOpen size={13} /> Dictionary
@@ -901,43 +981,35 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() =>
-                    askTutor(
-                      `Turn this concept into concise ICMA 5-mark exam bullet notes + 1 practice question:\n${refResult.title}: ${refResult.summary.slice(0, 900)}`
+                    void askTutor(
+                      `Is web definition ko asaan Urdu + Finance example + 1 ICMA 5-mark sawal mein tabdeel karein:\n${refResult.title}: ${refResult.summary.slice(0, 900)}`
                     )
                   }
                   className="w-full py-2 rounded-xl bg-cyan-500/25 text-cyan-100 font-semibold"
                 >
-                  Convert to Exam Notes
+                  Explain in Urdu + Merit Notes
                 </button>
               </div>
             )}
           </div>
 
           <div className="glass rounded-3xl p-4 space-y-2">
-            <h3 className="font-bold text-sm">Quick Tutor Actions</h3>
+            <h3 className="font-bold text-sm">Instant Teacher Prompts</h3>
             {[
-              'Explain Mintzberg 5 organizational parts step by step.',
-              'Summarize Balanced Scorecard perspectives & 4 drawbacks.',
-              'Give me a 5-mark ICMA OM past paper question and grade me.',
-              'Compare Herzberg Hygiene factors vs Motivators.'
+              'Mintzberg 5 organizational parts Urdu + corporate example se samjhao.',
+              'Balanced Scorecard perspectives aur 4 drawbacks yaad karwa dein.',
+              'Mujhe aaj office mein 2 meetings aa gayi hain, plan compress karein.',
+              'Test mein confidence low hai — Merit strategy aur dua/motivation dein.'
             ].map((q) => (
               <button
                 key={q}
                 type="button"
-                onClick={() => setQuestion(q)}
+                onClick={() => void askTutor(q)}
                 className="w-full text-left p-3 rounded-xl bg-white/5 hover:bg-white/10 text-xs"
               >
                 {q}
               </button>
             ))}
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => generateContent('plan')}
-              className="w-full mt-2 p-3 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 text-xs font-semibold"
-            >
-              Create 5-Step Adaptive Study Plan
-            </button>
           </div>
         </div>
       </div>
@@ -959,10 +1031,10 @@ export default function App() {
             </div>
             <div>
               <b>
-                ICMAP <span className="gradientText">SMART TUTOR PWA</span>
+                ICMAP <span className="gradientText">OM MERIT PWA</span>
               </b>
               <div className="text-[10px] text-slate-400">
-                Laptop • Tablet • Mobile Installable Web App
+                5 Dec 2026 Target • OM Only (9-Day Zero-to-Merit) • Laptop & Mobile PWA
               </div>
             </div>
           </button>
@@ -1040,7 +1112,7 @@ export default function App() {
           <aside className="hidden xl:block glass rounded-3xl p-4 h-fit sticky top-20 space-y-4">
             <div>
               <div className="text-xs text-cyan-300 uppercase tracking-widest mb-3 font-semibold">
-                Courses & Syllabus
+                Exam Countdown: {dailyPlan.daysToExam}d Left
               </div>
               {SUBJECTS.map((s) => (
                 <button
@@ -1064,32 +1136,32 @@ export default function App() {
             </div>
 
             <div className="border-t border-white/10 pt-4 text-xs space-y-2">
-              <div className="text-slate-400">Tutor Language & Voice</div>
+              <div className="text-slate-400">Mentor Language & Voice</div>
               <div className="flex items-center gap-1.5">
-                <button
-                  type="button"
-                  onClick={() => setLang('en')}
-                  className={`px-3 py-2 rounded-lg ${
-                    lang === 'en' ? 'bg-cyan-400/20 text-cyan-200' : 'bg-white/5'
-                  }`}
-                >
-                  English
-                </button>
                 <button
                   type="button"
                   onClick={() => setLang('ur')}
                   className={`px-3 py-2 rounded-lg ${
-                    lang === 'ur' ? 'bg-cyan-400/20 text-cyan-200' : 'bg-white/5'
+                    lang === 'ur' ? 'bg-cyan-400/20 text-cyan-200 font-bold' : 'bg-white/5'
                   }`}
                 >
                   Urdu
                 </button>
                 <button
                   type="button"
+                  onClick={() => setLang('en')}
+                  className={`px-3 py-2 rounded-lg ${
+                    lang === 'en' ? 'bg-cyan-400/20 text-cyan-200 font-bold' : 'bg-white/5'
+                  }`}
+                >
+                  English
+                </button>
+                <button
+                  type="button"
                   onClick={() => {
                     const next = !voiceEnabled;
                     setVoiceEnabled(next);
-                    if (!next && window.speechSynthesis) window.speechSynthesis.cancel();
+                    if (!next) stopSpeech();
                   }}
                   className="p-2 rounded-lg bg-white/5 ml-auto"
                 >
@@ -1101,78 +1173,50 @@ export default function App() {
 
           {/* Active Tab Content */}
           <section className="min-w-0 space-y-5">
-            {/* Mobile Subject Strip */}
-            <div className="xl:hidden flex gap-2 overflow-x-auto pb-1">
-              {SUBJECTS.map((s) => (
-                <button
-                  key={s.code}
-                  type="button"
-                  onClick={() => setSubject(s)}
-                  className={`glass px-3.5 py-2 rounded-xl text-xs whitespace-nowrap ${
-                    subject.code === s.code ? 'border-cyan-300/40 text-cyan-200' : ''
-                  }`}
-                >
-                  {s.code} {s.progress}%
-                </button>
-              ))}
-            </div>
-
             {tab === 'home' && (
               <>
-                <div className="glass rounded-3xl p-6 md:p-8 relative overflow-hidden">
-                  <div className="absolute -right-20 -top-20 w-64 h-64 bg-cyan-400/10 blur-3xl rounded-full" />
-                  <div className="relative">
-                    <div className="text-cyan-300 text-xs uppercase tracking-[.2em] font-semibold">
-                      Personal Tutor Command Center • PWA
-                    </div>
-                    <h1 className="text-2xl md:text-4xl font-extrabold mt-2">
-                      Study smarter on laptop & phone.{' '}
-                      <span className="gradientText">Recall. Practice. Improve.</span>
-                    </h1>
-                    <p className="text-slate-300 text-sm mt-3 max-w-2xl">
-                      Includes your M3 Organizational Management textbook & ML-1 Past Papers PDFs,
-                      configurable Pomodoro timer, study roadmap, 3D shuffle flashcards, and free
-                      zero-key AI tutor.
-                    </p>
-                    <div className="flex flex-wrap gap-3 mt-5">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedMaterial(STUDY_MATERIALS[0]);
-                          setTab('read');
-                        }}
-                        className="px-5 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-500 font-semibold text-sm flex items-center gap-1.5"
-                      >
-                        Open M3 OM Book <ChevronRight size={17} />
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSelectedMaterial(STUDY_MATERIALS[1]);
-                          setTab('read');
-                        }}
-                        className="px-5 py-3 rounded-xl glass text-sm font-medium"
-                      >
-                        Open Past Papers
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setTab('flashcards')}
-                        className="px-5 py-3 rounded-xl glass text-sm font-medium"
-                      >
-                        Shuffle Flashcards
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                {/* 1. MASTER STRATEGIST BRIEF OF THE DAY + URDU VOICE ASK TEACHER */}
+                <DailyBriefAndCoach
+                  plan={dailyPlan}
+                  weakTopics={weakTopics}
+                  lang={lang}
+                  onChangeLang={setLang}
+                  onChangeEnergyMode={(m) => {
+                    setEnergyMode(m);
+                    saveStored('icmap_energy_mode', m);
+                    showToast(`Routine adapted to ${m.replace('_', ' ')} mode!`);
+                  }}
+                  onToggleSlot={(slotId) => {
+                    const next = completedSlotIds.includes(slotId)
+                      ? completedSlotIds.filter((id) => id !== slotId)
+                      : [...completedSlotIds, slotId];
+                    setCompletedSlotIds(next);
+                    saveStored('icmap_daily_slots_done', next);
+                  }}
+                  onLaunchAction={handleLaunchRoutineAction}
+                  onLaunchTodayVideo={(q) => {
+                    setVideoQuery(q);
+                    setTab('videos');
+                    void findVideos(q);
+                  }}
+                  onSpeakText={speakText}
+                  onStopSpeech={stopSpeech}
+                  isSpeaking={isSpeaking}
+                  onGenerateAiBrief={generateAiDailyBrief}
+                  coachMessages={chat}
+                  onAskCoach={askTutor}
+                  onStartVoiceCoach={startVoiceQuestion}
+                  listeningVoice={listeningVoice}
+                  coachBusy={busy}
+                />
 
-                {/* Metrics Row */}
+                {/* 2. Metrics Row */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
                   {[
                     ['Overall Readiness', `${overall}%`, Target],
-                    ['Focus Logged', `${studyMinutesTotal}m`, Clock],
+                    ['Today Target', `${(dailyPlan.totalStudyMinutes / 60).toFixed(1)}h`, Clock],
                     ['Milestones Done', `${completedMilestones.length}/5`, CalendarDays],
-                    ['Weak Focus Areas', String(subject.weak.length), Brain]
+                    ['Weak Topics Tracked', String(weakTopics.length), Brain]
                   ].map(([label, val, IconComp]: any) => (
                     <div className="glass rounded-2xl p-4" key={label}>
                       <IconComp size={18} className="text-cyan-300" />
@@ -1182,7 +1226,7 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Pomodoro Timer + Study Roadmap Side-by-Side on Laptop */}
+                {/* 3. Pomodoro Timer + Study Roadmap Side-by-Side */}
                 <div className="grid lg:grid-cols-[360px_1fr] gap-5 items-start">
                   <PomodoroTimer
                     settings={pomodoroSettings}
@@ -1209,7 +1253,7 @@ export default function App() {
                   />
                 </div>
 
-                {/* Analytics + Weak Topics */}
+                {/* 4. Analytics + Weak Topics */}
                 <div className="grid lg:grid-cols-2 gap-5">
                   <div className="glass rounded-3xl p-5">
                     <h3 className="font-bold">Subject Readiness</h3>
@@ -1225,21 +1269,21 @@ export default function App() {
                     </div>
                   </div>
                   <div className="glass rounded-3xl p-5">
-                    <h3 className="font-bold">Priority Revision Topics</h3>
+                    <h3 className="font-bold">Auto-Tracked Priority Weak Topics</h3>
                     <div className="space-y-2 mt-4">
-                      {SUBJECTS.flatMap((s) => s.weak.map((w) => ({ s, w }))).slice(0, 6).map((item) => (
+                      {weakTopics.slice(0, 6).map((w) => (
                         <button
-                          key={item.s.code + item.w}
+                          key={w}
                           type="button"
                           onClick={() => {
-                            setSubject(item.s);
-                            setTopic(item.w);
+                            setTopic(w);
                             setTab('read');
                           }}
                           className="w-full p-3 rounded-xl bg-white/5 hover:bg-cyan-400/10 text-left flex justify-between items-center text-sm"
                         >
                           <span>
-                            <b>{item.s.code}</b> <span className="text-slate-300">{item.w}</span>
+                            <b className="text-rose-300">WEAK</b>{' '}
+                            <span className="text-slate-200">{w}</span>
                           </span>
                           <ChevronRight size={16} />
                         </button>
@@ -1259,27 +1303,31 @@ export default function App() {
                 onMarkRead={handleMarkRead}
                 onSaveNotes={handleSaveNotes}
                 onRunSelectionAi={runSelectionAi}
+                onAskTeacherInsideReader={askTeacherInsideReader}
+                onLookupWebConcept={lookupWebConceptSummary}
+                onSpeakText={speakText}
                 onSendToTutor={(prompt, reply) => {
                   setChat((prev) => [
                     ...prev,
                     { id: `u_${Date.now()}`, role: 'user', text: prompt },
-                    { id: `t_${Date.now() + 1}`, role: 'tutor', text: reply, provider: 'Selection AI' }
+                    { id: `t_${Date.now() + 1}`, role: 'tutor', text: reply, provider: 'Reader AI' }
                   ]);
                   setTab('tutor');
                 }}
                 onGenerateFlashcards={(matId) => {
                   const mat = STUDY_MATERIALS.find((m) => m.id === matId);
                   if (mat) setSelectedMaterial(mat);
-                  generateContent('flashcards', mat?.readingContent);
+                  void generateFlashcardsContent(mat?.readingContent, 5);
                 }}
                 onLaunchQuiz={(t) => {
                   setTopic(t);
+                  setPreferredTestMode('office_short');
                   setTab('tests');
                 }}
                 videoQuery={videoQuery}
                 onChangeVideoQuery={setVideoQuery}
                 videos={videos}
-                onFindVideos={findVideos}
+                onFindVideos={() => void findVideos()}
                 isFullScreen={false}
                 onToggleFullScreen={() => toggleFullScreen('active')}
               />
@@ -1288,14 +1336,15 @@ export default function App() {
             {tab === 'flashcards' && (
               <FlashcardDeck
                 cards={flashcards}
+                todayFiveCardIds={todayFiveCardIds}
+                defaultTodayFiveMode={defaultTodayFiveCards}
                 onRecordReview={handleFlashcardReview}
                 onAddCustomCard={handleAddCustomCard}
                 onDeleteCard={handleDeleteCard}
                 onGenerateFromMaterial={async (matId, count) => {
                   const mat = STUDY_MATERIALS.find((m) => m.id === matId);
                   if (mat) setSelectedMaterial(mat);
-                  await generateContent('flashcards', mat?.readingContent);
-                  void count;
+                  await generateFlashcardsContent(mat?.readingContent, count);
                 }}
                 isGenerating={generatingCards}
                 isFullScreen={false}
@@ -1303,20 +1352,38 @@ export default function App() {
               />
             )}
 
-            {tab === 'tests' && renderTestsPanel()}
+            {tab === 'tests' && (
+              <DailyTestsArena
+                weakTopics={weakTopics}
+                recentAttempts={testHistory}
+                initialMode={preferredTestMode}
+                lang={lang}
+                isFullScreen={false}
+                onToggleFullScreen={() => toggleFullScreen('active')}
+                onGenerateAiTest={generateAiTest}
+                onGradeTypedAnswer={gradeTypedAnswer}
+                onSpeakText={speakText}
+                onTestCompleted={handleTestCompleted}
+              />
+            )}
 
             {tab === 'tutor' && renderTutorPanel()}
 
             {tab === 'videos' && (
               <div className="glass rounded-3xl p-5 space-y-4">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl md:text-2xl font-bold">Topic Video Library</h2>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <div className="text-xs text-cyan-300 uppercase font-semibold">
+                      Recommended Video for Today’s Plan
+                    </div>
+                    <h2 className="text-xl md:text-2xl font-bold">{dailyPlan.todayVideoQuery}</h2>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => toggleFullScreen('active')}
-                    className="p-2.5 rounded-xl bg-white/5"
+                    onClick={() => void findVideos(dailyPlan.todayVideoQuery)}
+                    className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-rose-500 to-violet-500 text-xs font-bold flex items-center gap-1.5"
                   >
-                    <Maximize2 size={16} />
+                    <Play size={14} /> Watch Today’s Lecture
                   </button>
                 </div>
                 <div className="flex gap-2">
@@ -1327,7 +1394,7 @@ export default function App() {
                   />
                   <button
                     type="button"
-                    onClick={findVideos}
+                    onClick={() => void findVideos()}
                     className="px-4 rounded-xl bg-rose-500/20 text-rose-100 flex items-center gap-1.5 text-xs font-semibold"
                   >
                     <Play size={15} /> Find
@@ -1400,26 +1467,64 @@ export default function App() {
                 </div>
 
                 <div className="glass rounded-3xl p-5 space-y-3">
-                  <h3 className="font-bold text-lg">Google Drive Course Link</h3>
-                  <input
-                    value={driveLink}
-                    onChange={(e) => {
-                      setDriveLink(e.target.value);
-                      saveStored('icmap_drive_link', e.target.value);
-                    }}
-                    placeholder="Paste Google Drive folder or file link"
-                    className="w-full bg-black/25 border border-white/10 rounded-xl p-3 text-sm"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => driveLink && window.open(driveLink, '_blank')}
-                    className="px-4 py-2.5 rounded-xl bg-cyan-500/20 text-cyan-100 text-xs font-semibold inline-flex items-center gap-1.5"
-                  >
-                    Open Drive <ExternalLink size={14} />
-                  </button>
-                  <p className="text-xs text-slate-400 pt-2">
+                  <h3 className="font-bold text-lg">Your OM Google Drive Folders & Docs</h3>
+                  <div className="space-y-2">
+                    {[
+                      {
+                        label: 'OM Core Study Folder 1',
+                        url: 'https://drive.google.com/drive/folders/1JRAADz_hSw7MLr4_Pl6fuhuyRhlyt3ex'
+                      },
+                      {
+                        label: 'OM Supplementary Notes Folder 2',
+                        url: 'https://drive.google.com/drive/folders/1EdfluOCsZ_NUiRZE_oJRT9eXiK4d4aT3'
+                      },
+                      {
+                        label: 'Master OM Study Guide (Google Doc)',
+                        url: 'https://docs.google.com/document/d/1wZP3HFOlBIjIZJzw82Z_-yT7yeuuYfZYh3IVE3G3NJQ/edit?usp=drivesdk'
+                      },
+                      {
+                        label: 'OM Practice Banks & Past Sets Folder',
+                        url: 'https://drive.google.com/drive/folders/1cSJry6g8mBLEz0slwzLHyz-UyiGkvfXM'
+                      },
+                      {
+                        label: 'OM Lecture Videos & Clips Folder',
+                        url: 'https://drive.google.com/drive/folders/1trJJR26p772Twd0O7hFuzl-uRCtqDRzx'
+                      }
+                    ].map((d) => (
+                      <a
+                        key={d.url}
+                        href={d.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="p-3 rounded-xl bg-white/5 hover:bg-cyan-500/15 border border-white/10 flex items-center justify-between gap-2 text-xs font-medium text-cyan-100"
+                      >
+                        <span className="truncate">{d.label}</span>
+                        <ExternalLink size={14} className="shrink-0 text-cyan-300" />
+                      </a>
+                    ))}
+                  </div>
+                  <div className="pt-2 border-t border-white/10 space-y-2">
+                    <div className="text-xs text-slate-400">Custom Google Drive / Doc URL</div>
+                    <input
+                      value={driveLink}
+                      onChange={(e) => {
+                        setDriveLink(e.target.value);
+                        saveStored('icmap_drive_link', e.target.value);
+                      }}
+                      placeholder="Paste Google Drive folder or file link"
+                      className="w-full bg-black/25 border border-white/10 rounded-xl p-3 text-sm"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => driveLink && window.open(driveLink, '_blank')}
+                      className="px-4 py-2.5 rounded-xl bg-cyan-500/20 text-cyan-100 text-xs font-semibold inline-flex items-center gap-1.5"
+                    >
+                      Open Custom Link <ExternalLink size={14} />
+                    </button>
+                  </div>
+                  <p className="text-xs text-slate-400 pt-1">
                     Works offline on laptop & mobile once installed as a PWA. Your bundled OM
-                    Textbook & Past Papers PDFs are cached automatically in the browser.
+                    Textbook & Past Papers PDFs are cached automatically.
                   </p>
                 </div>
               </div>
@@ -1430,10 +1535,10 @@ export default function App() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                   <div>
                     <div className="text-xs text-cyan-300 uppercase font-semibold">
-                      ICMA ML-1 Past Paper Lab
+                      ICMA ML-1 Past Paper & Multi-Body Benchmark Lab
                     </div>
                     <h2 className="text-xl md:text-2xl font-bold">
-                      Past Papers Preparation (Q.1 – Q.10)
+                      Past Papers Q.1–Q.10 + Full 60/40 Mocks
                     </h2>
                   </div>
                   <button
@@ -1444,14 +1549,14 @@ export default function App() {
                     }}
                     className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-cyan-500 to-violet-500 text-xs font-semibold"
                   >
-                    Open Past Papers PDF & Answers
+                    Open Past Papers PDF & Solutions
                   </button>
                 </div>
                 <div className="grid md:grid-cols-3 gap-4">
                   {[
-                    ['01', '5-Mark Suggested Solutions', 'Study all 10 official ML-1 past questions inside Read & PDF view.'],
-                    ['02', 'Timed OM MCQ Sprint', 'Practice 12+ OM exam MCQs or generate fresh AI MCQs anytime.'],
-                    ['03', 'Convert to Flashcards', 'Generate active-recall flip cards straight from the Past Paper pack.']
+                    ['01', '5-Mark Suggested Solutions', 'Study all 10 official ML-1 past questions inside Read & PDF view with Urdu explanations.'],
+                    ['02', 'Test of the Day & Office Short', 'Attempt ICMA 60% MCQ / 40% Typing papers auto-calibrated to your weak topics.'],
+                    ['03', 'Full-Course Merit Mocks', 'Run Weekly Grand, Portion Grand, Half-Book & 3 Final Full-Course Mocks before Dec 5.']
                   ].map(([num, title, desc]) => (
                     <div className="p-5 rounded-2xl bg-white/5 border border-white/10" key={num}>
                       <div className="text-cyan-300 font-bold">{num}</div>
@@ -1463,18 +1568,20 @@ export default function App() {
                 <div className="flex flex-wrap gap-3">
                   <button
                     type="button"
-                    disabled={busy}
-                    onClick={() => generateContent('typing')}
+                    onClick={() => {
+                      setPreferredTestMode('full_course_mock');
+                      setTab('tests');
+                    }}
                     className="px-4 py-3 rounded-xl bg-violet-500/20 hover:bg-violet-500/30 text-xs font-semibold"
                   >
-                    Generate New 5-Mark Past Paper Questions
+                    Launch Full-Course 60/40 Merit Mock
                   </button>
                   <button
                     type="button"
-                    onClick={() => generateContent('flashcards', STUDY_MATERIALS[1].readingContent)}
+                    onClick={() => void generateFlashcardsContent(STUDY_MATERIALS[1].readingContent, 5)}
                     className="px-4 py-3 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 text-xs font-semibold"
                   >
-                    Create Flashcards from Past Papers
+                    Create 5 Cards from Past Papers
                   </button>
                 </div>
               </div>
@@ -1483,7 +1590,7 @@ export default function App() {
         </div>
       </main>
 
-      {/* Install PWA Instructions Modal (for Safari / browsers without beforeinstallprompt) */}
+      {/* Install PWA Instructions Modal */}
       {showInstallHelp && (
         <div className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-4">
           <div className="glass rounded-3xl p-6 max-w-md w-full space-y-3">
@@ -1496,7 +1603,7 @@ export default function App() {
             <ul className="text-xs text-slate-300 space-y-2 leading-5">
               <li>
                 <strong>Windows / Mac / Linux (Chrome or Edge):</strong> Click the{' '}
-                <strong>Install</strong> icon in the browser address bar (or ⋮ Menu →{' '}
+                <strong>Install</strong> icon in the address bar (or ⋮ Menu →{' '}
                 <em>Cast, save, and share → Install page as app</em>).
               </li>
               <li>
@@ -1518,7 +1625,6 @@ export default function App() {
         </div>
       )}
 
-      {/* Toast Notification */}
       {toastMsg && (
         <div className="fixed bottom-5 right-5 z-50 glass px-4 py-3 rounded-2xl border-cyan-300/40 text-xs text-cyan-100 shadow-xl">
           {toastMsg}
@@ -1526,8 +1632,8 @@ export default function App() {
       )}
 
       <footer className="max-w-7xl mx-auto w-full px-4 pb-6 pt-2 text-xs text-slate-500 flex justify-between">
-        <span>ICMAP Smart Tutor PWA • Installable on Laptop & Mobile</span>
-        <span>{busy ? 'AI Tutor working…' : 'Ready'}</span>
+        <span>ICMAP OM Merit Strategist PWA • {OM_MCQ_QUESTIONS.length} MCQs + 10 Past-Paper Typing Qs</span>
+        <span>{busy ? 'Teacher thinking…' : 'Ready for Dec 5 Merit'}</span>
       </footer>
     </div>
   );

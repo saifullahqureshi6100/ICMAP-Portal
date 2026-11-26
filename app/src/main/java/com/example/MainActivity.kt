@@ -185,6 +185,15 @@ fun StudyPortalShell(
     val selectedDeckFilter by viewModel.selectedDeckFilter.collectAsStateWithLifecycle()
     val flashcardGenState by viewModel.flashcardGenState.collectAsStateWithLifecycle()
     val pomodoroState by viewModel.pomodoroState.collectAsStateWithLifecycle()
+    val dailyBriefPlan by viewModel.dailyBriefPlan.collectAsStateWithLifecycle()
+    val aiBriefText by viewModel.aiBriefText.collectAsStateWithLifecycle()
+    val briefState by viewModel.briefState.collectAsStateWithLifecycle()
+    val completedRoutineIds by viewModel.completedRoutineIds.collectAsStateWithLifecycle()
+    val weakTopics by viewModel.weakTopics.collectAsStateWithLifecycle()
+    val typingFeedbackMap by viewModel.typingFeedbackMap.collectAsStateWithLifecycle()
+    val typingGradingId by viewModel.typingGradingId.collectAsStateWithLifecycle()
+    val readerQuickReply by viewModel.readerQuickReply.collectAsStateWithLifecycle()
+    val readerQuickState by viewModel.readerQuickState.collectAsStateWithLifecycle()
 
     val snackbarHostState = remember { SnackbarHostState() }
 
@@ -245,6 +254,12 @@ fun StudyPortalShell(
                         )
                     },
                     isGeneratingFlashcards = flashcardGenState is com.example.viewmodel.AiTaskState.Loading,
+                    readerQuickReply = readerQuickReply,
+                    readerQuickState = readerQuickState,
+                    onAskTeacherInReader = { mat, q, inUrdu ->
+                        viewModel.askTeacherFromReader(mat, q, inUrdu)
+                    },
+                    onClearReaderQuickReply = { viewModel.clearReaderQuickReply() },
                     onExit = { viewModel.exitFullScreen() }
                 )
             }
@@ -332,12 +347,12 @@ fun StudyPortalShell(
                     title = {
                         Column {
                             Text(
-                                text = "Study Portal",
+                                text = "OM Merit Portal",
                                 style = MaterialTheme.typography.titleLarge,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Hi, ${displayName.substringBefore(' ')}",
+                                text = "5 Dec Exam (${dailyBriefPlan.daysToExam}d) • Hi, ${displayName.substringBefore(' ')}",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -423,6 +438,15 @@ fun StudyPortalShell(
                                 plansState = studyPlansState,
                                 attemptsState = quizAttemptsState,
                                 planGenState = planGenState,
+                                dailyBriefPlan = dailyBriefPlan,
+                                aiBriefText = aiBriefText,
+                                briefState = briefState,
+                                completedRoutineIds = completedRoutineIds,
+                                weakTopics = weakTopics,
+                                onSelectEnergyMode = { mode -> viewModel.selectEnergyMode(mode) },
+                                onToggleRoutineSlot = { slotId -> viewModel.toggleRoutineSlot(slotId) },
+                                onGenerateAiBrief = { viewModel.generateAiBrief() },
+                                onLaunchRoutineAction = { type, focus -> viewModel.launchRoutineAction(type, focus) },
                                 onTogglePomodoro = { viewModel.togglePomodoroRunPause() },
                                 onResetPomodoro = { viewModel.resetPomodoro() },
                                 onSkipPomodoro = { viewModel.skipPomodoroPhase() },
@@ -502,6 +526,9 @@ fun StudyPortalShell(
                                 mcqGenState = mcqGenState,
                                 quizSession = quizSession,
                                 attemptsState = quizAttemptsState,
+                                typingFeedbackMap = typingFeedbackMap,
+                                typingGradingId = typingGradingId,
+                                onGradeTypingAnswer = { q, ans -> viewModel.gradeTypingAnswer(q, ans) },
                                 onSelectMcqBank = { bank, fs ->
                                     viewModel.selectMcqBank(bank, fs)
                                 },

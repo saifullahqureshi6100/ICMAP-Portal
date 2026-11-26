@@ -4,19 +4,24 @@ import {
   CheckCircle2,
   ExternalLink,
   FileText,
+  Globe,
   Highlighter,
   Layers,
   ListChecks,
   Maximize2,
+  MessageCircleQuestion,
+  Mic,
   Minimize2,
   Play,
   Save,
+  Send,
   Sparkles,
   Video,
+  Volume2,
   X
 } from 'lucide-react';
 import { STUDY_MATERIALS } from '../data/icmapData';
-import { StudyMaterialItem } from '../types';
+import { StudyMaterialItem, TutorLang } from '../types';
 
 interface PdfAndReaderViewProps {
   selectedMaterial: StudyMaterialItem;
@@ -30,6 +35,9 @@ interface PdfAndReaderViewProps {
     selectedText: string,
     material: StudyMaterialItem
   ) => Promise<string>;
+  onAskTeacherInsideReader: (question: string, material: StudyMaterialItem, inUrdu: boolean) => Promise<string>;
+  onLookupWebConcept: (query: string) => Promise<string>;
+  onSpeakText: (text: string, lang: TutorLang) => void;
   onSendToTutor: (prompt: string, reply: string) => void;
   onGenerateFlashcards: (materialId: string) => void;
   onLaunchQuiz: (topic: string) => void;
@@ -49,6 +57,9 @@ export const PdfAndReaderView: React.FC<PdfAndReaderViewProps> = ({
   onMarkRead,
   onSaveNotes,
   onRunSelectionAi,
+  onAskTeacherInsideReader,
+  onLookupWebConcept,
+  onSpeakText,
   onSendToTutor,
   onGenerateFlashcards,
   onLaunchQuiz,
@@ -70,6 +81,14 @@ export const PdfAndReaderView: React.FC<PdfAndReaderViewProps> = ({
   const [customPassage, setCustomPassage] = useState('');
   const [showCustomAiInput, setShowCustomAiInput] = useState(false);
 
+  // Ask Questions in Urdu + Voice directly inside Reading / Full-Screen Reading mode
+  const [showAskDrawer, setShowAskDrawer] = useState(false);
+  const [askQuestionInput, setAskQuestionInput] = useState('');
+  const [askUrduMode, setAskUrduMode] = useState(true);
+  const [askBusy, setAskBusy] = useState(false);
+  const [listeningVoice, setListeningVoice] = useState(false);
+  const [askHistory, setAskHistory] = useState<Array<{ q: string; a: string }>>([]);
+
   const readerArticleRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -78,7 +97,6 @@ export const PdfAndReaderView: React.FC<PdfAndReaderViewProps> = ({
     setSelectedText('');
   }, [selectedMaterial.id, savedNotesMap]);
 
-  // Track highlighted text selection inside the reading area
   useEffect(() => {
     function handleSelection() {
       const sel = window.getSelection();
@@ -104,7 +122,7 @@ export const PdfAndReaderView: React.FC<PdfAndReaderViewProps> = ({
     setAiLoading(true);
     setAiError('');
     setAiActionTitle(
-      action === 'summarize_bullets' ? 'Bullet-Point Summary Notes' : 'Complex Concept Explanation'
+      action === 'summarize_bullets' ? 'Bullet-Point Summary Notes' : 'Concept Explanation (Urdu / English)'
     );
     try {
       const response = await onRunSelectionAi(action, clean, selectedMaterial);
@@ -114,6 +132,71 @@ export const PdfAndReaderView: React.FC<PdfAndReaderViewProps> = ({
     } finally {
       setAiLoading(false);
     }
+  }
+
+  async function submitInlineAsk(customText?: string) {
+    const q = (customText ?? askQuestionInput).trim();
+    if (!q || askBusy) return;
+    setAskBusy(true);
+    if (!customText) setAskQuestionInput('');
+    try {
+      const reply = await onAskTeacherInsideReader(q, selectedMaterial, askUrduMode);
+      setAskHistory((prev) => [...prev, { q, a: reply }]);
+      if (askUrduMode) {
+        onSpeakText(reply, 'ur');
+      }
+    } catch (e: any) {
+      setAskHistory((prev) => [
+        ...prev,
+        { q, a: e?.message || 'Teacher could not respond right now.' }
+      ]);
+    } finally {
+      setAskBusy(false);
+    }
+  }
+
+  async function handleWebLookupQuestion() {
+    const q = askQuestionInput.trim() || selectedText.trim() || selectedMaterial.title;
+    if (!q || askBusy) return;
+    setAskBusy(true);
+    try {
+      const wikiSummary = await onLookupWebConcept(q);
+      const reply = await onAskTeacherInsideReader(
+        `Web reference found for "${q}": ${wikiSummary}\nNow explain this to me simply in Urdu with a practical finance/office example.`,
+        selectedMaterial,
+        true
+      );
+      setAskHistory((prev) => [...prev, { q: `[Web Search] ${q}`, a: reply }]);
+      onSpeakText(reply, 'ur');
+    } catch (e: any) {
+      setAskHistory((prev) => [
+        ...prev,
+        { q: `[Web Search] ${q}`, a: e?.message || 'Could not fetch web reference.' }
+      ]);
+    } finally {
+      setAskBusy(false);
+    }
+  }
+
+  function startReaderVoiceQuestion() {
+    const SpeechRec =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRec) return;
+    const recognition = new SpeechRec();
+    recognition.lang = askUrduMode ? 'ur-PK' : 'en-US';
+    recognition.interimResults = false;
+    recognition.maxAlternatives = 1;
+    setListeningVoice(true);
+    recognition.onresult = (event: any) => {
+      const spoken = String(event?.results?.[0]?.[0]?.transcript || '').trim();
+      setListeningVoice(false);
+      if (spoken) {
+        void submitInlineAsk(spoken);
+      }
+    };
+    recognition.onerror = () => setListeningVoice(false);
+    recognition.onend = () => setListeningVoice(false);
+    recognition.start();
   }
 
   function appendAiToNotes() {
@@ -131,7 +214,7 @@ export const PdfAndReaderView: React.FC<PdfAndReaderViewProps> = ({
 
   return (
     <div className="space-y-5">
-      {/* Material Selector + Full-Screen Header */}
+      {/* Material Selector + Full-Screen + Ask Question Header */}
       <div className="glass rounded-3xl p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex-1 min-w-[220px]">
@@ -142,6 +225,17 @@ export const PdfAndReaderView: React.FC<PdfAndReaderViewProps> = ({
             <p className="text-xs text-slate-400 mt-1">{selectedMaterial.description}</p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowAskDrawer((v) => !v)}
+              className={`px-3.5 py-2.5 rounded-xl text-xs font-bold flex items-center gap-1.5 min-h-[44px] ${
+                showAskDrawer
+                  ? 'bg-violet-500 text-white'
+                  : 'bg-gradient-to-r from-violet-500/30 to-cyan-500/30 border border-violet-300/35 text-violet-100'
+              }`}
+            >
+              <MessageCircleQuestion size={15} /> Ask Questions (Urdu Voice)
+            </button>
             <button
               type="button"
               onClick={() => onMarkRead(selectedMaterial.id)}
@@ -160,6 +254,113 @@ export const PdfAndReaderView: React.FC<PdfAndReaderViewProps> = ({
             </button>
           </div>
         </div>
+
+        {/* Inline Ask Teacher Drawer (Always Accessible in Normal AND Full-Screen Reading/PDF Mode) */}
+        {showAskDrawer && (
+          <div className="mt-4 p-4 rounded-2xl bg-black/35 border border-violet-300/35 space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="text-xs font-bold text-violet-200 flex items-center gap-1.5">
+                <Sparkles size={14} /> Reading Assistant • Urdu Voice + Practical Example + Web Lookup
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setAskUrduMode((v) => !v)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold ${
+                    askUrduMode ? 'bg-cyan-500/25 text-cyan-100' : 'bg-white/10 text-slate-300'
+                  }`}
+                >
+                  {askUrduMode ? 'Urdu Explanation ON' : 'English'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setShowAskDrawer(false)}
+                  aria-label="Close Ask Teacher Drawer"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            </div>
+
+            {selectedText && (
+              <button
+                type="button"
+                onClick={() =>
+                  submitInlineAsk(
+                    `Is text ko asaan Urdu mein ek practical example ke sath doosray tareeqay se samjhao: "${selectedText.slice(0, 600)}"`
+                  )
+                }
+                className="w-full text-left p-2.5 rounded-xl bg-cyan-500/15 border border-cyan-300/25 text-xs text-cyan-100"
+              >
+                Explain selected text in simple Urdu with practical example →
+              </button>
+            )}
+
+            {askHistory.length > 0 && (
+              <div className="space-y-2 max-h-56 overflow-y-auto scrollbar pr-1">
+                {askHistory.map((item, idx) => (
+                  <div key={idx} className="p-3 rounded-xl bg-white/5 text-xs space-y-1">
+                    <div className="text-cyan-200 font-semibold">Q: {item.q}</div>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="text-slate-200 whitespace-pre-wrap leading-5 flex-1">
+                        {item.a}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => onSpeakText(item.a, askUrduMode ? 'ur' : 'en')}
+                        className="text-cyan-300 shrink-0 p-1"
+                        aria-label="Speak answer aloud"
+                      >
+                        <Volume2 size={14} />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-wrap gap-2">
+              <button
+                type="button"
+                disabled={askBusy}
+                onClick={startReaderVoiceQuestion}
+                aria-label="Ask reading question in voice"
+                className={`px-3.5 rounded-xl min-h-[44px] flex items-center gap-1.5 text-xs font-semibold ${
+                  listeningVoice
+                    ? 'bg-rose-500/35 text-rose-100 animate-pulse'
+                    : 'bg-violet-500/25 text-violet-100'
+                }`}
+              >
+                <Mic size={15} /> {listeningVoice ? 'Listening…' : 'Voice'}
+              </button>
+              <input
+                value={askQuestionInput}
+                onChange={(e) => setAskQuestionInput(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && submitInlineAsk()}
+                placeholder="Apna sawal likhein ya Mic se bol kar poochein (e.g. Example se dobara samjhao)..."
+                className="flex-1 min-w-[180px] bg-black/30 border border-white/15 rounded-xl px-3 py-2 text-xs"
+              />
+              <button
+                type="button"
+                disabled={askBusy}
+                onClick={handleWebLookupQuestion}
+                title="Search Web/Wikipedia + Explain in Urdu"
+                className="px-3 rounded-xl bg-amber-500/20 text-amber-100 text-xs font-semibold flex items-center gap-1 min-h-[44px]"
+              >
+                <Globe size={14} /> Web
+              </button>
+              <button
+                type="button"
+                disabled={askBusy || !askQuestionInput.trim()}
+                onClick={() => submitInlineAsk()}
+                aria-label="Send reading question"
+                className="px-4 rounded-xl bg-cyan-500/25 text-cyan-100 text-xs font-bold flex items-center gap-1 min-h-[44px]"
+              >
+                <Send size={14} /> {askBusy ? '…' : 'Ask'}
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Material Switcher Pills */}
         <div className="flex gap-2 overflow-x-auto pb-1 mt-4 scrollbar">
@@ -269,7 +470,7 @@ export const PdfAndReaderView: React.FC<PdfAndReaderViewProps> = ({
                 value={customPassage}
                 onChange={(e) => setCustomPassage(e.target.value)}
                 rows={3}
-                placeholder="Copy/paste a paragraph or concept from the PDF page here to summarize or explain..."
+                placeholder="Copy/paste a paragraph or concept from the PDF page here to summarize or explain in Urdu/English..."
                 className="w-full rounded-xl bg-white/5 border border-white/10 p-3 text-xs"
               />
               <div className="flex flex-wrap gap-2">
@@ -287,7 +488,7 @@ export const PdfAndReaderView: React.FC<PdfAndReaderViewProps> = ({
                   onClick={() => triggerSelectionAi('explain_concept', customPassage)}
                   className="px-3.5 py-2 rounded-xl bg-violet-500/25 text-violet-100 text-xs font-semibold"
                 >
-                  <Sparkles size={14} className="inline mr-1" /> Explain Concept
+                  <Sparkles size={14} className="inline mr-1" /> Explain in Urdu / English
                 </button>
               </div>
             </div>
@@ -350,8 +551,7 @@ export const PdfAndReaderView: React.FC<PdfAndReaderViewProps> = ({
             </div>
           ) : (
             <div className="p-5 rounded-2xl bg-white/5 text-xs text-slate-300">
-              Click <strong>Search YouTube</strong> to find lecture walkthroughs (opens embedded results when{' '}
-              <code>YOUTUBE_API_KEY</code> is configured or launches direct YouTube search).
+              Click <strong>Search YouTube</strong> to watch today’s topic video walkthrough.
             </div>
           )}
         </div>
@@ -362,7 +562,7 @@ export const PdfAndReaderView: React.FC<PdfAndReaderViewProps> = ({
             <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-white/10">
               <div className="text-xs text-cyan-200 flex items-center gap-1.5">
                 <Highlighter size={15} />
-                Highlight any text below to generate AI Bullet Notes or Explanations
+                Highlight any text for AI Bullet Notes or Urdu Explanation
               </div>
               <div className="flex gap-2">
                 <button
@@ -382,7 +582,6 @@ export const PdfAndReaderView: React.FC<PdfAndReaderViewProps> = ({
               </div>
             </div>
 
-            {/* Active Selection Bar */}
             {selectedText && (
               <div className="p-3.5 rounded-2xl bg-cyan-500/12 border border-cyan-300/35 space-y-2.5">
                 <div className="flex items-start justify-between gap-2">
@@ -415,7 +614,7 @@ export const PdfAndReaderView: React.FC<PdfAndReaderViewProps> = ({
                     onClick={() => triggerSelectionAi('explain_concept', selectedText)}
                     className="px-3.5 py-2 rounded-xl bg-violet-500/25 hover:bg-violet-500/35 text-violet-100 text-xs font-semibold flex items-center gap-1.5 min-h-[40px]"
                   >
-                    <Sparkles size={14} /> Explain Complex Concept
+                    <Sparkles size={14} /> Explain in Urdu / English
                   </button>
                 </div>
               </div>
@@ -464,7 +663,14 @@ export const PdfAndReaderView: React.FC<PdfAndReaderViewProps> = ({
                         onClick={appendAiToNotes}
                         className="flex-1 px-3 py-2 rounded-xl bg-emerald-500/20 text-emerald-100 text-xs font-semibold flex items-center justify-center gap-1"
                       >
-                        <Save size={13} /> Save to Notes
+                        <Save size={13} /> Save Notes
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => onSpeakText(aiResult, 'ur')}
+                        className="px-3 py-2 rounded-xl bg-violet-500/20 text-violet-100 text-xs font-semibold flex items-center gap-1"
+                      >
+                        <Volume2 size={13} /> Listen
                       </button>
                       <button
                         type="button"

@@ -70,6 +70,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.example.data.DailyBriefPlan
+import com.example.data.EnergyMode
 import com.example.data.FullScreenMode
 import com.example.data.MaterialProgress
 import com.example.data.McqBank
@@ -77,9 +79,11 @@ import com.example.data.PomodoroPhase
 import com.example.data.PomodoroState
 import com.example.data.PreloadedMaterials
 import com.example.data.QuizAttempt
+import com.example.data.RoutineActionType
 import com.example.data.StudyMaterial
 import com.example.data.StudyPlanItem
 import com.example.ui.components.PomodoroTimerCard
+import com.example.ui.components.StrategistBriefCard
 import com.example.ui.components.StudyRoadmapCard
 import com.example.viewmodel.AiTaskState
 import com.example.viewmodel.DashboardSummary
@@ -95,6 +99,15 @@ fun DashboardScreen(
     plansState: StreamUiState<List<StudyPlanItem>>,
     attemptsState: StreamUiState<List<QuizAttempt>>,
     planGenState: AiTaskState,
+    dailyBriefPlan: DailyBriefPlan,
+    aiBriefText: String?,
+    briefState: AiTaskState,
+    completedRoutineIds: Set<String>,
+    weakTopics: List<String>,
+    onSelectEnergyMode: (EnergyMode) -> Unit,
+    onToggleRoutineSlot: (String) -> Unit,
+    onGenerateAiBrief: () -> Unit,
+    onLaunchRoutineAction: (RoutineActionType, String) -> Unit,
     onTogglePomodoro: () -> Unit,
     onResetPomodoro: () -> Unit,
     onSkipPomodoro: () -> Unit,
@@ -137,6 +150,22 @@ fun DashboardScreen(
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // 0. 30-Yr Strategist & 50-Yr Master Teacher Urdu Daily Brief + Office Routine
+        item {
+            StrategistBriefCard(
+                plan = dailyBriefPlan,
+                aiBriefText = aiBriefText,
+                briefState = briefState,
+                completedRoutineIds = completedRoutineIds,
+                weakTopics = weakTopics,
+                onSelectEnergyMode = onSelectEnergyMode,
+                onToggleRoutineSlot = onToggleRoutineSlot,
+                onGenerateAiBrief = onGenerateAiBrief,
+                onLaunchRoutineAction = onLaunchRoutineAction,
+                onAskTeacher = onLaunchFullScreenTutor
+            )
+        }
+
         // 1. Hero Mastery & Goal Card
         item {
             Card(
@@ -168,12 +197,12 @@ fun DashboardScreen(
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             Text(
-                                text = "PLAN & PROGRESS TRACKING",
+                                text = "OM MERIT TRACKING • 5 DEC 2026",
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.78f)
                             )
                             Text(
-                                text = summary.profile?.studyGoal ?: "Master Core Drive Modules",
+                                text = summary.profile?.studyGoal ?: "OM M3 Certificate of Merit (5 Dec 2026)",
                                 style = MaterialTheme.typography.titleLarge,
                                 color = MaterialTheme.colorScheme.onPrimary,
                                 maxLines = 2,

@@ -1,15 +1,24 @@
-import { AiEngineMode, FreeReferenceItem, McqQuestionItem } from '../types';
+import {
+  AiEngineMode,
+  FreeReferenceItem,
+  McqQuestionItem,
+  TypingQuestionItem
+} from '../types';
+
+export type TutorActionType =
+  | 'chat'
+  | 'mcq'
+  | 'flashcards'
+  | 'plan'
+  | 'daily_brief'
+  | 'numerical'
+  | 'typing'
+  | 'grade_typing'
+  | 'summarize_bullets'
+  | 'explain_concept';
 
 interface TutorCallParams {
-  action:
-    | 'chat'
-    | 'mcq'
-    | 'flashcards'
-    | 'plan'
-    | 'numerical'
-    | 'typing'
-    | 'summarize_bullets'
-    | 'explain_concept';
+  action: TutorActionType;
   subject: string;
   topic: string;
   question?: string;
@@ -31,13 +40,13 @@ export async function callFreeAiTutor(params: TutorCallParams): Promise<TutorApi
     subject,
     topic,
     question = '',
-    language = 'bilingual',
+    language = 'ur',
     count = 5,
     context = '',
     engineMode = 'auto_free'
   } = params;
 
-  // Try /api/tutor backend first when running on Vercel / server-backed host
+  // Primary serverless Vercel route (/api/tutor checks process.env.GROQ_API_KEY first, then Gemini, OpenRouter, Pollinations)
   if (engineMode === 'auto_free') {
     try {
       const resp = await fetch('/api/tutor', {
@@ -48,7 +57,7 @@ export async function callFreeAiTutor(params: TutorCallParams): Promise<TutorApi
           subject,
           topic,
           question,
-          language,
+          language: language === 'en' ? 'english' : 'urdu_bilingual',
           count,
           context
         })
@@ -59,12 +68,12 @@ export async function callFreeAiTutor(params: TutorCallParams): Promise<TutorApi
           return {
             text: String(data.text),
             parsed: data.parsed ?? tryParseJson(String(data.text)),
-            provider: data.provider || 'Server Free AI'
+            provider: data.provider || 'Groq / Free AI Backend'
           };
         }
       }
     } catch {
-      // Static hosts (GitHub Pages / Netlify / local vite preview) fall through cleanly to direct zero-key Pollinations
+      // Static hosts fallback cleanly to zero-key Pollinations
     }
   }
 
@@ -72,32 +81,34 @@ export async function callFreeAiTutor(params: TutorCallParams): Promise<TutorApi
 }
 
 async function callPollinationsDirect(params: TutorCallParams): Promise<TutorApiResponse> {
-  const { action, subject, topic, question = '', language = 'bilingual', count = 5, context = '' } = params;
+  const { action, subject, topic, question = '', language = 'ur', count = 5, context = '' } = params;
   const langRule =
     language === 'en'
-      ? 'Respond in clear English.'
-      : 'Respond in clear English with concise Roman Urdu memory cues where helpful.';
+      ? 'Respond in crisp, authoritative English with practical corporate examples.'
+      : 'Respond in warm, easy-to-speak Roman Urdu / Urdu mixed with core ICMA English exam keywords so an executive finance student understands effortlessly even when tired.';
 
   let taskPrompt = question;
   if (action === 'mcq' || action === 'numerical') {
-    taskPrompt = `Create ${count} ICMA exam-grade MCQs about "${topic}" (${subject}). Return ONLY valid JSON with no markdown wrapper: {"questions":[{"question":"...","options":["A","B","C","D"],"answer":0,"explanation":"..."}]}`;
+    taskPrompt = `Create ${count} merit-grade ICMA/ACCA/CIMA/ICAEW MCQs on "${topic}" (${subject}). Return ONLY valid JSON with no markdown wrapper: {"questions":[{"question":"...","options":["A","B","C","D"],"answer":0,"explanation":"...","topicTag":"${topic}","sourceBenchmark":"ICMA/ACCA/CIMA"}]}`;
   } else if (action === 'flashcards') {
-    taskPrompt = `Create ${count} high-yield active recall flashcards on "${topic}" (${subject}). Return ONLY valid JSON with no markdown wrapper: {"cards":[{"front":"...","back":"...","hint":"..."}]}`;
-  } else if (action === 'plan') {
-    taskPrompt = `Create a 5-session adaptive study plan for "${topic}" (${subject}). Return ONLY valid JSON with no markdown wrapper: {"sessions":[{"title":"...","minutes":35,"task":"..."}],"strategy":"..."}`;
+    taskPrompt = `Create ${count} high-yield spaced-repetition flashcards on "${topic}" (${subject}). Return ONLY valid JSON with no markdown wrapper: {"cards":[{"front":"...","back":"...","hint":"..."}]}`;
+  } else if (action === 'plan' || action === 'daily_brief') {
+    taskPrompt = `Deliver today's Strategist & Recovery Briefing for a busy Finance office student aiming to win the Pakistan Certificate of Merit in ICMA OM on 5 December 2026. Cover total study hours, 08:00 AM, 12:45–13:15 Office Break + Short Test, 15:30 Break 2, 17:30 tired 5 flashcards, 19:00–20:00 fresh block, 15m recovery break, 20:15 Daily 60/40 Test, 23:30 sleep, plus upcoming Mock alerts.`;
   } else if (action === 'typing') {
-    taskPrompt = `Write 3 short-answer 5-mark ICMA past-paper style questions on "${topic}" with bullet-point model answers.`;
+    taskPrompt = `Create ${count} 5-mark ICMA ML-1 / CIMA / ACCA typing questions on "${topic}". Return ONLY valid JSON with no markdown wrapper: {"questions":[{"question":"...","marks":5,"topicTag":"${topic}","keywords":["..."],"modelAnswer":"..."}]}`;
+  } else if (action === 'grade_typing') {
+    taskPrompt = `Grade the student's 5-mark typed answer strictly against ICMA examiner marking standards. Give marks/5, missing bullet points, and a 3-line Certificate of Merit improvement in ${langRule}.`;
   } else if (action === 'summarize_bullets') {
-    taskPrompt = `Summarize this study passage into crisp exam bullet-point notes:\n- **Core Idea** (1 sentence)\n- **Key Bullet Notes** (4-6 bullets)\n- **Key Terms & Exam Hook**`;
+    taskPrompt = `Summarize this passage into ICMA merit-grade bullet notes (${langRule}): Core Idea, 5 Exam Bullets, Keywords, and Corporate Example.`;
   } else if (action === 'explain_concept') {
-    taskPrompt = `Explain the complex concepts in this study passage clearly:\n- **Plain-English Meaning**\n- **Step-by-Step Breakdown**\n- **Practical Example**\n- **Exam Watch-Out**`;
+    taskPrompt = `Explain this passage in ${langRule}: (1) Simple explanation, (2) Real Corporate Finance example, (3) Alternative simple angle, and (4) Exam Trap.`;
   } else if (!taskPrompt) {
-    taskPrompt = `Explain "${topic}" (${subject}) clearly with exam structure.`;
+    taskPrompt = `Teach "${topic}" (${subject}) in ${langRule} with a practical office/corporate example.`;
   }
 
-  const systemPrompt = `You are ICMAP Smart Tutor for Organizational Management (M3), Accounting, Taxation & Finance. ${langRule} Be concise, accurate, and exam-focused.`;
+  const systemPrompt = `You are a veteran Corporate Finance & OM Strategist (30 yrs industry + 50+ yrs Master Teacher & Recovery Coach) helping a busy executive student top Pakistan in ICMA M3 Organizational Management on 5 December 2026 from Zero Prep. ${langRule}`;
   const fullUserPrompt = context
-    ? `${taskPrompt}\n\nStudy Material Context:\n${context.slice(0, 4500)}`
+    ? `${taskPrompt}\n\nStudy Context:\n${context.slice(0, 4500)}`
     : taskPrompt;
 
   const response = await fetch('https://text.pollinations.ai/', {
@@ -133,7 +144,7 @@ async function callPollinationsDirect(params: TutorCallParams): Promise<TutorApi
   return {
     text: extracted,
     parsed: tryParseJson(extracted),
-    provider: 'Pollinations Free ($0 • No Key)'
+    provider: 'Pollinations Free ($0 Failover)'
   };
 }
 
@@ -166,7 +177,7 @@ export async function fetchWikipediaConcept(query: string): Promise<FreeReferenc
   }
 
   return {
-    sourceName: 'Wikipedia REST API ($0 • No Key)',
+    sourceName: 'Wikipedia REST API ($0 • Live Web Lookup)',
     title: String(summaryJson.title || hit.title),
     subtitle: String(summaryJson.description || 'Encyclopedia Summary'),
     summary: extract,
@@ -214,17 +225,43 @@ export async function fetchDictionaryWord(wordInput: string): Promise<FreeRefere
   };
 }
 
-export function parseMcqArrayFromAi(parsed: any, bankId = 'ai_generated'): McqQuestionItem[] {
+export function parseMcqArrayFromAi(
+  parsed: any,
+  bankId = 'ai_generated',
+  defaultTopic = 'General OM'
+): McqQuestionItem[] {
   const rawList = Array.isArray(parsed?.questions) ? parsed.questions : [];
   return rawList
     .filter((q: any) => q?.question && Array.isArray(q?.options) && q.options.length >= 2)
     .map((q: any, idx: number) => ({
       id: `ai_mcq_${Date.now()}_${idx}`,
       bankId,
+      topicTag: String(q.topicTag || defaultTopic).trim(),
+      sourceBenchmark: String(q.sourceBenchmark || 'AI Exam Bank').trim(),
       question: String(q.question).trim(),
       options: q.options.map((opt: any) => String(opt).trim()),
       answer: Math.max(0, Math.min(q.options.length - 1, Number(q.answer ?? 0) || 0)),
       explanation: String(q.explanation || 'Review the underlying concept in your study text.').trim()
+    }));
+}
+
+export function parseTypingQuestionsFromAi(
+  parsed: any,
+  defaultTopic = 'General OM'
+): TypingQuestionItem[] {
+  const rawList = Array.isArray(parsed?.questions) ? parsed.questions : [];
+  return rawList
+    .filter((q: any) => q?.question && q?.modelAnswer)
+    .map((q: any, idx: number) => ({
+      id: `ai_typ_${Date.now()}_${idx}`,
+      topicTag: String(q.topicTag || defaultTopic).trim(),
+      marks: Number(q.marks ?? 5) || 5,
+      sourceBenchmark: String(q.sourceBenchmark || 'ICMA/ACCA/CIMA 5-Mark').trim(),
+      question: String(q.question).trim(),
+      keywords: Array.isArray(q.keywords)
+        ? q.keywords.map((k: any) => String(k).trim()).filter(Boolean)
+        : [],
+      modelAnswer: String(q.modelAnswer).trim()
     }));
 }
 

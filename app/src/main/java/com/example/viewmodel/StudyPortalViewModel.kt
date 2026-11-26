@@ -4,6 +4,8 @@ import android.graphics.Bitmap
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.AiTutorRepository
+import com.example.data.DailyBriefPlan
+import com.example.data.EnergyMode
 import com.example.data.Flashcard
 import com.example.data.FreeExternalApiService
 import com.example.data.FreeReferenceResult
@@ -22,11 +24,14 @@ import com.example.data.QuizAttempt
 import com.example.data.QuizSessionState
 import com.example.data.ReaderAiAction
 import com.example.data.ReaderAiSessionState
+import com.example.data.RoutineActionType
+import com.example.data.StrategistEngine
 import com.example.data.StudyMaterial
 import com.example.data.StudyPlanItem
 import com.example.data.StudyRepository
 import com.example.data.TutorEngineMode
 import com.example.data.TutorMessage
+import com.example.data.TypingQuestion
 import com.example.data.UserProfile
 import com.google.firebase.ai.type.content
 import com.google.firebase.firestore.FirebaseFirestoreException
@@ -138,13 +143,54 @@ class StudyPortalViewModel(
     private val _feedbackMessage = MutableStateFlow<String?>(null)
     val feedbackMessage: StateFlow<String?> = _feedbackMessage.asStateFlow()
 
+    // 5 Dec 2026 OM Zero-to-Merit Master Strategist State
+    private val _weakTopics = MutableStateFlow(
+        listOf("Balanced Scorecard Drawbacks (Q.4)", "Mintzberg 5 Parts (Q.6)", "MRP & OPT (Q.10)")
+    )
+    val weakTopics: StateFlow<List<String>> = _weakTopics.asStateFlow()
+
+    private val _energyMode = MutableStateFlow(EnergyMode.NORMAL)
+    val energyMode: StateFlow<EnergyMode> = _energyMode.asStateFlow()
+
+    private val _completedRoutineIds = MutableStateFlow<Set<String>>(emptySet())
+    val completedRoutineIds: StateFlow<Set<String>> = _completedRoutineIds.asStateFlow()
+
+    val dailyBriefPlan: StateFlow<DailyBriefPlan> = combine(_weakTopics, _energyMode) { weak, mode ->
+        StrategistEngine.buildDailyBriefPlan(weakTopics = weak, energyMode = mode)
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(STOP_TIMEOUT_MILLIS),
+        initialValue = StrategistEngine.buildDailyBriefPlan(
+            weakTopics = listOf("Balanced Scorecard Drawbacks (Q.4)", "Mintzberg 5 Parts (Q.6)", "MRP & OPT (Q.10)"),
+            energyMode = EnergyMode.NORMAL
+        )
+    )
+
+    private val _aiBriefText = MutableStateFlow<String?>(null)
+    val aiBriefText: StateFlow<String?> = _aiBriefText.asStateFlow()
+
+    private val _briefState = MutableStateFlow<AiTaskState>(AiTaskState.Idle)
+    val briefState: StateFlow<AiTaskState> = _briefState.asStateFlow()
+
+    private val _typingFeedbackMap = MutableStateFlow<Map<String, String>>(emptyMap())
+    val typingFeedbackMap: StateFlow<Map<String, String>> = _typingFeedbackMap.asStateFlow()
+
+    private val _typingGradingId = MutableStateFlow<String?>(null)
+    val typingGradingId: StateFlow<String?> = _typingGradingId.asStateFlow()
+
+    private val _readerQuickReply = MutableStateFlow<String?>(null)
+    val readerQuickReply: StateFlow<String?> = _readerQuickReply.asStateFlow()
+
+    private val _readerQuickState = MutableStateFlow<AiTaskState>(AiTaskState.Idle)
+    val readerQuickState: StateFlow<AiTaskState> = _readerQuickState.asStateFlow()
+
     // AI Tutor state
     private val _tutorMessages = MutableStateFlow(
         listOf(
             TutorMessage(
                 id = "welcome_msg",
                 isUser = false,
-                text = "Welcome to your Study Portal AI Tutor! Ask me to explain any concept from your Google Drive modules, create flashcards, walk through practice problems, or analyze a photo of your notes."
+                text = "Assalam-o-Alaikum Beta! Main aapka 30-Yr Corporate Finance Strategist & 50-Yr OM Master Teacher hoon. 5 Dec 2026 exam mein ${StrategistEngine.daysToDec5Exam()} din baqi hain — Zero Prep se Pakistan Certificate of Merit tak! Dashboard par 'Brief of the Day (Urdu)' dabaein ya Urdu/English mein voice ya text sawal poochein."
             )
         )
     )
@@ -254,6 +300,118 @@ class StudyPortalViewModel(
     fun exitFullScreen() {
         dismissReaderAiSheet()
         _fullScreenMode.value = null
+    }
+
+    fun selectEnergyMode(mode: EnergyMode) {
+        _energyMode.value = mode
+        _aiBriefText.value = null
+        _feedbackMessage.value = "Plan adapted: ${mode.label} (${mode.subtitle})"
+    }
+
+    fun toggleRoutineSlot(slotId: String) {
+        val current = _completedRoutineIds.value
+        _completedRoutineIds.value = if (slotId in current) current - slotId else current + slotId
+    }
+
+    fun generateAiBrief() {
+        if (_briefState.value is AiTaskState.Loading) return
+        val plan = dailyBriefPlan.value
+        val weak = _weakTopics.value
+        viewModelScope.launch {
+            _briefState.value = AiTaskState.Loading
+            try {
+                _aiBriefText.value = aiRepo.generateDailyBrief(plan, weak)
+                _briefState.value = AiTaskState.Idle
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _aiBriefText.value = plan.urduSpokenBrief
+                _briefState.value = AiTaskState.Error(e.localizedMessage ?: "Using built-in Urdu strategist brief.")
+            }
+        }
+    }
+
+    fun launchRoutineAction(actionType: RoutineActionType, topicFocus: String) {
+        val materials = (materialsState.value as? StreamUiState.Success)?.data ?: PreloadedMaterials.items
+        when (actionType) {
+            RoutineActionType.READ_VIDEO -> {
+                val mat = if (topicFocus.contains("past", ignoreCase = true) || topicFocus.contains("Q.")) {
+                    materials.firstOrNull { it.id == "om_past_papers_ml1" } ?: materials.first()
+                } else {
+                    materials.firstOrNull { it.id == "om_study_text_2026" } ?: materials.first()
+                }
+                openMaterialInFullScreen(mat, false)
+            }
+            RoutineActionType.OFFICE_SHORT_TEST -> {
+                val bank = OmMcqBanks.banks.firstOrNull { it.id == "om_office_short_test" } ?: OmMcqBanks.banks.first()
+                selectMcqBank(bank, launchFullScreen = true)
+            }
+            RoutineActionType.FLASHCARDS -> {
+                openFlashcardsFullScreen(null)
+            }
+            RoutineActionType.DAILY_TEST -> {
+                val bank = OmMcqBanks.banks.firstOrNull { it.id == "om_test_of_the_day" } ?: OmMcqBanks.banks.first()
+                selectMcqBank(bank, launchFullScreen = true)
+            }
+        }
+    }
+
+    fun gradeTypingAnswer(question: TypingQuestion, userAnswer: String) {
+        val cleaned = userAnswer.trim()
+        if (cleaned.isEmpty() || _typingGradingId.value != null) return
+        _typingGradingId.value = question.id
+        viewModelScope.launch {
+            try {
+                val feedback = aiRepo.gradeTypingAnswer(question, cleaned)
+                _typingFeedbackMap.value = _typingFeedbackMap.value + (question.id to feedback)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _feedbackMessage.value = e.localizedMessage ?: "AI Grader unavailable right now."
+            } finally {
+                _typingGradingId.value = null
+            }
+        }
+    }
+
+    fun askTeacherFromReader(material: StudyMaterial, question: String, inUrdu: Boolean) {
+        val cleaned = question.trim()
+        if (cleaned.isEmpty()) return
+        _readerQuickState.value = AiTaskState.Loading
+        viewModelScope.launch {
+            try {
+                val langHint = if (inUrdu) {
+                    "Explain clearly in easy Roman Urdu + Urdu with practical corporate example and ICMA 5-mark keywords."
+                } else {
+                    "Explain clearly in crisp English with a corporate example and ICMA 5-mark exam bullet points."
+                }
+                val prompt = buildString {
+                    appendLine("Material: ${material.title}")
+                    if (material.contentMarkdown.isNotBlank()) {
+                        appendLine("Reference Excerpt: ${material.contentMarkdown.take(1500)}")
+                    }
+                    appendLine("Student Question: $cleaned")
+                    appendLine(langHint)
+                }
+                val acc = StringBuilder()
+                aiRepo.streamTutorResponse(prompt = prompt, history = emptyList(), attachedImage = null, useLiteModel = false)
+                    .collect { chunk ->
+                        acc.clear()
+                        acc.append(chunk)
+                        _readerQuickReply.value = chunk
+                    }
+                _readerQuickState.value = AiTaskState.Idle
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _readerQuickState.value = AiTaskState.Error(e.localizedMessage ?: "Could not reach teacher.")
+            }
+        }
+    }
+
+    fun clearReaderQuickReply() {
+        _readerQuickReply.value = null
+        _readerQuickState.value = AiTaskState.Idle
     }
 
     fun toggleFullScreenForActiveTab() {
@@ -567,7 +725,13 @@ class StudyPortalViewModel(
                         text = reply
                     )
                 } else {
-                    aiRepo.streamTutorResponse(effectivePrompt, priorHistory, attachedImage).collect { accumulated ->
+                    val useLite = engine == TutorEngineMode.GEMINI_LITE && attachedImage == null
+                    aiRepo.streamTutorResponse(
+                        prompt = effectivePrompt,
+                        history = priorHistory,
+                        attachedImage = attachedImage,
+                        useLiteModel = useLite
+                    ).collect { accumulated ->
                         latestText = accumulated
                         _tutorStreamingText.value = accumulated
                     }
@@ -944,6 +1108,11 @@ class StudyPortalViewModel(
         val current = _quizSession.value
         if (current.isSubmitted || current.questions.isEmpty()) return
         _quizSession.value = current.copy(isSubmitted = true)
+        if (current.accuracyPercent < 70) {
+            val currentWeak = _weakTopics.value
+            val updated = (listOf(current.topic) + currentWeak).distinct().take(6)
+            _weakTopics.value = updated
+        }
         submitQuizAttempt(
             topic = current.topic,
             totalQuestions = current.questions.size,

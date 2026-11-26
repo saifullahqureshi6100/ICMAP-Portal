@@ -19,14 +19,17 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.MenuBook
 import androidx.compose.material.icons.rounded.AutoAwesome
+import androidx.compose.material.icons.rounded.EditNote
 import androidx.compose.material.icons.rounded.Fullscreen
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Quiz
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -34,6 +37,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
@@ -48,8 +52,10 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.data.McqBank
 import com.example.data.OmMcqBanks
+import com.example.data.OmTypingQuestions
 import com.example.data.QuizAttempt
 import com.example.data.QuizSessionState
+import com.example.data.TypingQuestion
 import com.example.ui.components.McqQuizArenaContent
 import com.example.viewmodel.AiTaskState
 import com.example.viewmodel.StreamUiState
@@ -68,6 +74,9 @@ fun McqScreen(
     mcqGenState: AiTaskState,
     quizSession: QuizSessionState,
     attemptsState: StreamUiState<List<QuizAttempt>>,
+    typingFeedbackMap: Map<String, String> = emptyMap(),
+    typingGradingId: String? = null,
+    onGradeTypingAnswer: (TypingQuestion, String) -> Unit = { _, _ -> },
     onSelectMcqBank: (McqBank, Boolean) -> Unit,
     onGenerateAndStartFullScreen: (String, String, Int, Boolean) -> Unit,
     onStartCurrentFullScreen: () -> Unit,
@@ -79,6 +88,19 @@ fun McqScreen(
     var topicInput by remember { mutableStateOf("Balanced Scorecard & Performance Pyramid (OM Unit 14)") }
     var notesInput by remember { mutableStateOf("") }
     var questionCount by remember { mutableFloatStateOf(5f) }
+    var selectedTypingIdx by remember { mutableStateOf(0) }
+    var typingAnswerText by remember(selectedTypingIdx) { mutableStateOf("") }
+    var showModelAnswer by remember(selectedTypingIdx) { mutableStateOf(false) }
+
+    val shortOfficeBank = remember {
+        OmMcqBanks.banks.firstOrNull { it.id == "om_office_short_test" } ?: OmMcqBanks.banks.first()
+    }
+    val testOfDayBank = remember {
+        OmMcqBanks.banks.firstOrNull { it.id == "om_test_of_the_day" } ?: OmMcqBanks.banks.first()
+    }
+    val fullMockBank = remember {
+        OmMcqBanks.banks.firstOrNull { it.id == "om_mock_exam" } ?: OmMcqBanks.banks.last()
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -96,15 +118,81 @@ fun McqScreen(
                     verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
                     Text(
-                        text = "MCQ Testing Arena",
+                        text = "Daily Tests (60% MCQ / 40% Typing)",
                         style = MaterialTheme.typography.headlineSmall,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = "Solve quizzes inline or toggle Full-Screen Exam Mode anytime without losing your progress.",
+                        text = "Short Test during Office (12:45 PM) + Test of the Day (8:15 PM) & Past-Paper Typing Lab for 5 Dec Merit.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
+            }
+        }
+
+        // Daily Emergency Exam Quick Launchers (Office Short Test, Test of the Day, Full Mock)
+        item {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f)),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(
+                    modifier = Modifier.padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.Quiz,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                        Text(
+                            text = "Today's Scheduled OM Exams",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = { onSelectMcqBank(shortOfficeBank, true) },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .minimumInteractiveComponentSize()
+                                .testTag("launch_office_short_test_button")
+                        ) {
+                            Text("Short Test (Office)", style = MaterialTheme.typography.labelMedium)
+                        }
+                        Button(
+                            onClick = { onSelectMcqBank(testOfDayBank, true) },
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .minimumInteractiveComponentSize()
+                                .testTag("launch_test_of_the_day_button")
+                        ) {
+                            Text("Test of the Day", style = MaterialTheme.typography.labelMedium)
+                        }
+                    }
+                    OutlinedButton(
+                        onClick = { onSelectMcqBank(fullMockBank, true) },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .minimumInteractiveComponentSize()
+                            .testTag("launch_full_merit_mock_button")
+                    ) {
+                        Icon(Icons.Rounded.Fullscreen, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(6.dp))
+                        Text("Full-Course Merit Mock (All 14 Units)", style = MaterialTheme.typography.labelLarge)
+                    }
                 }
             }
         }
@@ -203,6 +291,171 @@ fun McqScreen(
                                         Text("Test", style = MaterialTheme.typography.labelMedium)
                                     }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Section B: 40% Past-Paper 5-Mark Typing Exam Lab + AI Examiner Grading
+        item {
+            val activeQuestion = OmTypingQuestions.items.getOrElse(selectedTypingIdx) { OmTypingQuestions.items.first() }
+            val aiFeedback = typingFeedbackMap[activeQuestion.id]
+            val isGrading = typingGradingId == activeQuestion.id
+
+            Card(
+                shape = RoundedCornerShape(22.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .testTag("typing_paper_lab_card")
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Rounded.EditNote,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.secondary
+                        )
+                        Text(
+                            text = "Section B: 40% Typing Paper (5-Mark Questions)",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        items(OmTypingQuestions.items.size) { idx ->
+                            val item = OmTypingQuestions.items[idx]
+                            FilterChip(
+                                selected = selectedTypingIdx == idx,
+                                onClick = { selectedTypingIdx = idx },
+                                label = { Text("${item.topicTag} (${item.marks}m)") }
+                            )
+                        }
+                    }
+
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                        ) {
+                            Text(
+                                text = "${activeQuestion.sourceBenchmark} • ${activeQuestion.marks} Marks",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.secondary,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = activeQuestion.question,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+
+                    OutlinedTextField(
+                        value = typingAnswerText,
+                        onValueChange = { typingAnswerText = it },
+                        label = { Text("Type your numbered 5-mark bullet answer here...") },
+                        minLines = 4,
+                        maxLines = 8,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .testTag("typing_answer_input")
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showModelAnswer = !showModelAnswer },
+                            modifier = Modifier
+                                .weight(1f)
+                                .minimumInteractiveComponentSize()
+                        ) {
+                            Text(if (showModelAnswer) "Hide Solution" else "Model Answer")
+                        }
+                        Button(
+                            onClick = { onGradeTypingAnswer(activeQuestion, typingAnswerText) },
+                            enabled = !isGrading && typingAnswerText.isNotBlank(),
+                            modifier = Modifier
+                                .weight(1.25f)
+                                .minimumInteractiveComponentSize()
+                                .testTag("grade_typing_button")
+                        ) {
+                            if (isGrading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(16.dp),
+                                    strokeWidth = 2.dp,
+                                    color = MaterialTheme.colorScheme.onPrimary
+                                )
+                                Spacer(Modifier.width(6.dp))
+                                Text("Grading...")
+                            } else {
+                                Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(6.dp))
+                                Text("AI Grade (0–5)")
+                            }
+                        }
+                    }
+
+                    AnimatedVisibility(visible = showModelAnswer) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "ICMA Examiner Model Answer & Merit Keywords:",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = activeQuestion.modelAnswer,
+                                    style = MaterialTheme.typography.bodySmall
+                                )
+                            }
+                        }
+                    }
+
+                    AnimatedVisibility(visible = !aiFeedback.isNullOrBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(4.dp)
+                            ) {
+                                Text(
+                                    text = "50-Yr Teacher Examiner Feedback:",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = aiFeedback.orEmpty(),
+                                    style = MaterialTheme.typography.bodySmall
+                                )
                             }
                         }
                     }
