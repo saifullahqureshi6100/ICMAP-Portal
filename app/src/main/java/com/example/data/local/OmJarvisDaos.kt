@@ -149,6 +149,9 @@ interface StudySessionDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(entities: List<StudySessionEntity>)
 
+    @Query("SELECT SUM(durationMinutes) FROM study_sessions WHERE dateKey = :dateKey")
+    suspend fun getTodayTotalMinutes(dateKey: String): Int?
+
     @Query("DELETE FROM study_sessions")
     suspend fun clearAll()
 }

@@ -43,12 +43,14 @@ import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.rounded.TrackChanges
 import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import kotlin.math.roundToInt
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -686,3 +688,104 @@ fun RightStudyMediaPanel(
         )
     }
 }
+
+@Composable
+fun DailyStudyGoalCard(
+    todayMinutes: Int,
+    targetMinutes: Int,
+    onLogMinutes: (Int) -> Unit,
+    onUpdateTarget: (Int) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    var showEditGoalDialog by remember { mutableStateOf(false) }
+    var goalSliderValue by remember { mutableStateOf(targetMinutes.toFloat()) }
+
+    val pct = ((todayMinutes.toFloat() / targetMinutes.coerceAtLeast(1)) * 100f).roundToInt()
+
+    JarvisGlassCard(glowCyan = true, modifier = modifier) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(Icons.Rounded.Schedule, contentDescription = null, tint = JarvisCyanGlow, modifier = Modifier.size(19.dp))
+                    Text("Daily Study Hour Goal", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.Bold, color = JarvisTextPrimary)
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(
+                    text = "${todayMinutes}m logged of ${targetMinutes}m goal (${String.format("%.1f", todayMinutes / 60f)}h / ${String.format("%.1f", targetMinutes / 60f)}h)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = JarvisTextSecondary
+                )
+            }
+            MasteryRing(
+                percent = pct,
+                size = 56.dp,
+                strokeWidth = 6.dp,
+                accentColor = if (pct >= 100) JarvisNeonGreen else JarvisElectricBlue,
+                centerLabel = "$pct%"
+            )
+        }
+        Spacer(Modifier.height(10.dp))
+        LinearProgressIndicator(
+            progress = { (todayMinutes.toFloat() / targetMinutes.coerceAtLeast(1)).coerceIn(0f, 1f) },
+            color = if (pct >= 100) JarvisNeonGreen else JarvisCyanGlow,
+            trackColor = JarvisCardInnerDark,
+            modifier = Modifier.fillMaxWidth().height(8.dp).clip(RoundedCornerShape(6.dp))
+        )
+        Spacer(Modifier.height(10.dp))
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            OutlinedButton(
+                onClick = { onLogMinutes(15) },
+                modifier = Modifier.weight(1f).heightIn(min = 40.dp).testTag("goal_log_15m_btn")
+            ) { Text("+15m") }
+            OutlinedButton(
+                onClick = { onLogMinutes(30) },
+                modifier = Modifier.weight(1f).heightIn(min = 40.dp).testTag("goal_log_30m_btn")
+            ) { Text("+30m") }
+            FilledTonalButton(
+                onClick = {
+                    goalSliderValue = targetMinutes.toFloat()
+                    showEditGoalDialog = true
+                },
+                modifier = Modifier.weight(1.2f).heightIn(min = 40.dp).testTag("edit_daily_goal_btn")
+            ) { Text("Edit Goal") }
+        }
+    }
+
+    if (showEditGoalDialog) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { showEditGoalDialog = false },
+            title = { Text("Set Daily Study Hour Goal") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Target: ${goalSliderValue.roundToInt()} minutes (${String.format("%.1f", goalSliderValue / 60f)} hours)")
+                    androidx.compose.material3.Slider(
+                        value = goalSliderValue,
+                        onValueChange = { goalSliderValue = it },
+                        valueRange = 60f..360f,
+                        steps = 19
+                    )
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        onUpdateTarget(goalSliderValue.roundToInt())
+                        showEditGoalDialog = false
+                    }
+                ) { Text("Save Goal") }
+            },
+            dismissButton = {
+                androidx.compose.material3.TextButton(onClick = { showEditGoalDialog = false }) { Text("Cancel") }
+            }
+        )
+    }
+}
+

@@ -37,6 +37,7 @@ import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.SmartToy
 import androidx.compose.material.icons.rounded.Style
 import androidx.compose.material.icons.rounded.TrackChanges
+import androidx.compose.material.icons.rounded.VolumeUp
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -85,6 +86,7 @@ enum class JarvisNavDest(
     TOPICS("topics", "Topics", Icons.Rounded.Psychology, true, false),
     VIDEO_LIBRARY("video_library", "Video Library", Icons.Rounded.PlayCircleOutline, true, true),
     FLASHCARDS("flashcards", "Flashcards", Icons.Rounded.Style, true, false),
+    GLOSSARY("glossary", "Audio Glossary", Icons.Rounded.VolumeUp, true, false),
     MCQ_TESTS("mcq_tests", "MCQ Tests", Icons.Rounded.BuildCircle, true, true),
     TYPING_PRACTICE("typing_practice", "Typing Practice", Icons.Rounded.Computer, true, false),
     GRAND_TESTS("grand_tests", "Grand Tests", Icons.Rounded.TrackChanges, true, false),

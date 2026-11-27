@@ -16,8 +16,12 @@ import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import androidx.work.workDataOf
 import com.example.MainActivity
+import com.example.data.local.OmJarvisDatabase
 import com.example.data.preferences.OmJarvisSettings
+import java.text.SimpleDateFormat
 import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 object ReminderDeepLink {
@@ -54,6 +58,16 @@ class StudyReminderWorker(
         val typeName = inputData.getString(KEY_TYPE) ?: StudyReminderType.MORNING_BRIEF.name
         val type = StudyReminderType.entries.firstOrNull { it.name == typeName } ?: StudyReminderType.MORNING_BRIEF
 
+        // Check Room database to see if today's study session has started yet
+        val db = OmJarvisDatabase.getInstance(applicationContext)
+        val todayKey = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
+        val todayMinutes = db.studySessionDao().getTodayTotalMinutes(todayKey) ?: 0
+
+        // If today's session has already started (todayMinutes > 0), skip alerting that it hasn't started
+        if (todayMinutes > 0) {
+            return Result.success()
+        }
+
         val manager = applicationContext.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
@@ -79,8 +93,8 @@ class StudyReminderWorker(
 
         val notif = NotificationCompat.Builder(applicationContext, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_lock_idle_alarm)
-            .setContentTitle(type.title)
-            .setContentText(type.body)
+            .setContentTitle("⚠️ ${type.title} (Session Pending)")
+            .setContentText("Your daily M3 study session hasn't started yet today! Tap to begin.")
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .setContentIntent(pendingIntent)

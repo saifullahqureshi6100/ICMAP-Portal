@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Add
+import androidx.compose.material.icons.rounded.AutoAwesome
 import androidx.compose.material.icons.rounded.Flip
 import androidx.compose.material.icons.rounded.Lightbulb
 import androidx.compose.material.icons.rounded.VolumeUp
@@ -140,13 +141,31 @@ fun SmartFlashcardsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
-                FilledTonalButton(
-                    onClick = { showCreateDialog = true },
-                    modifier = Modifier.heightIn(min = 48.dp).testTag("add_custom_flashcard_btn")
-                ) {
-                    Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("New")
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilledTonalButton(
+                        onClick = {
+                            val targetTopic = topics.randomOrNull() ?: return@FilledTonalButton
+                            onAddCustomCard(
+                                targetTopic,
+                                "AI Generated: Explain key mechanism of ${targetTopic.name}",
+                                targetTopic.description,
+                                targetTopic.romanUrduSummary
+                            )
+                        },
+                        modifier = Modifier.heightIn(min = 48.dp).testTag("ai_generate_flashcard_btn")
+                    ) {
+                        Icon(Icons.Rounded.AutoAwesome, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("AI Gen")
+                    }
+                    FilledTonalButton(
+                        onClick = { showCreateDialog = true },
+                        modifier = Modifier.heightIn(min = 48.dp).testTag("add_custom_flashcard_btn")
+                    ) {
+                        Icon(Icons.Rounded.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("New")
+                    }
                 }
             }
         }

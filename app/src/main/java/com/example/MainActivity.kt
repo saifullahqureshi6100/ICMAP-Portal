@@ -67,6 +67,7 @@ import com.example.ui.jarvis.JarvisSpaceBackdrop
 import com.example.ui.jarvis.JarvisTeacherScreen
 import com.example.ui.jarvis.JarvisTopHudHeader
 import com.example.ui.jarvis.OmJarvisOnboardingScreen
+import com.example.ui.jarvis.OmGlossaryScreen
 import com.example.ui.jarvis.SettingsBackupScreen
 import com.example.ui.jarvis.SmartFlashcardsScreen
 import com.example.ui.jarvis.StudyPlannerScreen
@@ -312,7 +313,9 @@ fun OmJarvisAppRoot(
                     onAskJarvis = { navigateToRoute(JarvisNavDest.JARVIS.route) },
                     onCallJarvis = { navController.navigate(JarvisNavDest.CALL_JARVIS.route) { launchSingleTop = true } },
                     onOpenMockExam = { navigateToRoute(JarvisNavDest.GRAND_TESTS.route) },
-                    onOpenAnalytics = { navigateToRoute(JarvisNavDest.ANALYTICS.route) }
+                    onOpenAnalytics = { navigateToRoute(JarvisNavDest.ANALYTICS.route) },
+                    onLogMinutes = { mins -> vm.logQuickMinutes(mins) },
+                    onUpdateDailyTarget = { mins -> vm.updateSettings { it.copy(dailyTargetMinutes = mins) } }
                 )
             }
 
@@ -446,6 +449,10 @@ fun OmJarvisAppRoot(
                     onReviewCard = { card, rating -> vm.reviewFlashcard(card, rating) },
                     onAddCustomCard = { topic, f, b, h -> vm.addCustomFlashcard(topic, f, b, h) }
                 )
+            }
+
+            composable(JarvisNavDest.GLOSSARY.route) {
+                OmGlossaryScreen(settings = settings)
             }
 
             composable(JarvisNavDest.MCQ_TESTS.route) {

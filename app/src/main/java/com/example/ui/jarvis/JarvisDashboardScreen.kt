@@ -110,7 +110,9 @@ fun JarvisDashboardScreen(
     onAskJarvis: () -> Unit,
     onCallJarvis: () -> Unit,
     onOpenMockExam: () -> Unit,
-    onOpenAnalytics: () -> Unit
+    onOpenAnalytics: () -> Unit,
+    onLogMinutes: (Int) -> Unit,
+    onUpdateDailyTarget: (Int) -> Unit
 ) {
     var showAdvicePanel by remember { mutableStateOf(true) }
     val priorityTopic = analytics.revisionNowTop5.firstOrNull()?.topic ?: activeTopic
@@ -132,6 +134,15 @@ fun JarvisDashboardScreen(
                 analytics = analytics,
                 isCompact = !isWideTablet,
                 onSelectPart = onFilterPart
+            )
+
+            // Daily Study Hour Goal & Progress Ring Card
+            DailyStudyGoalCard(
+                todayMinutes = analytics.todayMinutes,
+                targetMinutes = settings.dailyTargetMinutes,
+                onLogMinutes = onLogMinutes,
+                onUpdateTarget = onUpdateDailyTarget,
+                modifier = Modifier.fillMaxWidth()
             )
 
             // 2. Middle Section: Today's Mission + Jarvis Teacher's Advice + Video/Reading/Notes Panel

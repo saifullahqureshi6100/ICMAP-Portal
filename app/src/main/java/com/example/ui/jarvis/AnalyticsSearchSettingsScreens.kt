@@ -95,14 +95,57 @@ fun AnalyticsScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         item {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
-                    Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+            var showReportDialog by remember { mutableStateOf(false) }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBack, modifier = Modifier.size(48.dp)) {
+                        Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                    }
+                    Column {
+                        Text("Study Analytics", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
+                        Text("All figures computed live from stored activity", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
                 }
-                Column {
-                    Text("Study Analytics", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)
-                    Text("All figures computed live from stored activity", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                FilledTonalButton(
+                    onClick = { showReportDialog = true },
+                    modifier = Modifier.heightIn(min = 48.dp).testTag("export_weekly_report_btn")
+                ) {
+                    Icon(Icons.Rounded.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Export Report")
                 }
+            }
+
+            if (showReportDialog) {
+                val reportText = buildString {
+                    appendLine("=== OM JARVIS WEEKLY PERFORMANCE REPORT ===")
+                    appendLine("Student: Saifullah Qureshi")
+                    appendLine("Target: ICMA M3 Organizational Management (7 Dec 2026)")
+                    appendLine("Readiness Score: ${analytics.readiness.readinessScore}%")
+                    appendLine("Weekly Study Time: ${analytics.weeklyMinutes} mins (${String.format("%.1f", analytics.weeklyMinutes / 60f)} hrs)")
+                    appendLine("Study Streak: ${analytics.streakDays} Days")
+                    appendLine("Topics Mastered: ${analytics.topicsCompleted} / ${analytics.topicsCompleted + analytics.topicsRemaining}")
+                    appendLine("Overall MCQ Accuracy: ${analytics.overallMcqAccuracy}%")
+                    appendLine("Descriptive Practice Average: ${analytics.descriptiveAveragePct}%")
+                    appendLine("Flashcard Mastery: ${analytics.flashcardMasteryPct}%")
+                }
+                AlertDialog(
+                    onDismissRequest = { showReportDialog = false },
+                    title = { Text("Weekly Performance Report") },
+                    text = {
+                        Text(
+                            text = reportText,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                    },
+                    confirmButton = {
+                        TextButton(onClick = { showReportDialog = false }) { Text("Close") }
+                    }
+                )
             }
         }
 
