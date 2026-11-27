@@ -34,6 +34,8 @@ object MaleTutorTts {
     fun configureMaleVoice(
         engine: TextToSpeech?,
         preferUrdu: Boolean,
+        speechSpeed: Float = 0.94f,
+        pitchScale: Float = 0.85f,
         onDone: (() -> Unit)? = null
     ) {
         if (engine == null) return
@@ -94,8 +96,9 @@ object MaleTutorTts {
         }
 
         // Enforce male mentor register: natural deep voice for verified male voices, lowered pitch otherwise
-        engine.setPitch(if (selectedVerifiedMale) 0.85f else 0.70f)
-        engine.setSpeechRate(0.94f)
+        val basePitch = pitchScale.coerceIn(0.65f, 0.95f)
+        engine.setPitch(if (selectedVerifiedMale) basePitch else (basePitch * 0.82f).coerceAtLeast(0.65f))
+        engine.setSpeechRate(speechSpeed.coerceIn(0.6f, 1.5f))
 
         if (onDone != null) {
             engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {

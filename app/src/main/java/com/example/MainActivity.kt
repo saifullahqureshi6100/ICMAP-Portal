@@ -1,10 +1,10 @@
 package com.example
 
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.compose.animation.Crossfade
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -13,603 +13,804 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.rounded.Logout
-import androidx.compose.material.icons.rounded.AutoAwesome
-import androidx.compose.material.icons.rounded.DarkMode
-import androidx.compose.material.icons.rounded.Dashboard
-import androidx.compose.material.icons.rounded.FolderCopy
-import androidx.compose.material.icons.rounded.Fullscreen
-import androidx.compose.material.icons.rounded.LightMode
-import androidx.compose.material.icons.rounded.Quiz
-import androidx.compose.material.icons.rounded.Style
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
-import androidx.compose.material3.NavigationRail
-import androidx.compose.material3.NavigationRailItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberDrawerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.credentials.CredentialManager
-import androidx.lifecycle.ViewModelProvider.AndroidViewModelFactory.Companion.APPLICATION_KEY
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
-import com.example.auth.AuthScreen
-import com.example.auth.signOutUser
-import com.example.data.AiTutorRepository
-import com.example.data.FullScreenMode
-import com.example.data.PortalTab
-import com.example.data.PreloadedMaterials
-import com.example.data.StudyRepository
+import androidx.navigation.NavGraph.Companion.findStartDestination
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import com.example.data.configureAppCheck
-import com.example.ui.screens.DashboardScreen
-import com.example.ui.screens.FlashcardsScreen
-import com.example.ui.screens.FullScreenFlashcardScreen
-import com.example.ui.screens.FullScreenMcqExam
-import com.example.ui.screens.FullScreenPomodoroScreen
-import com.example.ui.screens.FullScreenReadingViewer
-import com.example.ui.screens.FullScreenRoadmapScreen
-import com.example.ui.screens.FullScreenTutorStudio
-import com.example.ui.screens.MaterialsScreen
-import com.example.ui.screens.McqScreen
-import com.example.ui.screens.TutorScreen
+import com.example.data.security.TutorStyleRequest
+import com.example.ui.jarvis.AnalyticsScreen
+import com.example.ui.jarvis.CallJarvisScreen
+import com.example.ui.jarvis.ExamLabTab
+import com.example.ui.jarvis.GlobalSearchScreen
+import com.example.ui.jarvis.JarvisDashboardScreen
+import com.example.ui.jarvis.JarvisNavDest
+import com.example.ui.jarvis.JarvisSidebarPanel
+import com.example.ui.jarvis.JarvisSpaceBackdrop
+import com.example.ui.jarvis.JarvisTeacherScreen
+import com.example.ui.jarvis.JarvisTopHudHeader
+import com.example.ui.jarvis.OmJarvisOnboardingScreen
+import com.example.ui.jarvis.SettingsBackupScreen
+import com.example.ui.jarvis.SmartFlashcardsScreen
+import com.example.ui.jarvis.StudyPlannerScreen
+import com.example.ui.jarvis.SyllabusWorkspaceScreen
+import com.example.ui.jarvis.TestingAndMockScreen
+import com.example.ui.jarvis.VideoLibraryScreen
+import com.example.ui.jarvis.WorkspaceMode
+import com.example.ui.theme.JarvisCyanGlow
+import com.example.ui.theme.JarvisElectricBlue
+import com.example.ui.theme.JarvisGold
+import com.example.ui.theme.JarvisSidebarSurface
+import com.example.ui.theme.JarvisTextPrimary
+import com.example.ui.theme.JarvisTextSecondary
 import com.example.ui.theme.StudyPortalTheme
-import com.example.viewmodel.StreamUiState
-import com.example.viewmodel.StudyPortalViewModel
-import com.google.firebase.Firebase
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.auth.auth
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.delay
+import com.example.viewmodel.OmJarvisViewModel
+import com.example.work.ReminderDeepLink
+import kotlinx.coroutines.launch
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : ComponentActivity() {
+
+    private var deepLinkRouteState = mutableStateOf<String?>(null)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-
-        // Mandatory Step 1: Configure App Check with launch intent before any UI or Firebase calls
         configureAppCheck(this, intent)
+        deepLinkRouteState.value = intent?.getStringExtra(ReminderDeepLink.EXTRA_TARGET_ROUTE)
 
         enableEdgeToEdge()
         setContent {
-            val prefs = remember { getSharedPreferences("om_merit_prefs", MODE_PRIVATE) }
-            var isMidnightTheme by remember {
-                mutableStateOf(prefs.getBoolean("is_midnight_theme", true))
-            }
-            val onToggleTheme: () -> Unit = {
-                val next = !isMidnightTheme
-                isMidnightTheme = next
-                prefs.edit().putBoolean("is_midnight_theme", next).apply()
-            }
+            val vm: OmJarvisViewModel = viewModel()
+            val settings by vm.settings.collectAsStateWithLifecycle()
 
-            StudyPortalTheme(darkTheme = isMidnightTheme) {
+            StudyPortalTheme(darkTheme = settings.darkThemeEnabled) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AppContent(
-                        isMidnightTheme = isMidnightTheme,
-                        onToggleTheme = onToggleTheme
+                    OmJarvisAppRoot(
+                        vm = vm,
+                        pendingDeepLinkRoute = deepLinkRouteState.value,
+                        onConsumeDeepLink = { deepLinkRouteState.value = null }
                     )
                 }
             }
         }
     }
-}
 
-@Composable
-fun AppContent(
-    isMidnightTheme: Boolean,
-    onToggleTheme: () -> Unit
-) {
-    var currentUser by remember { mutableStateOf(Firebase.auth.currentUser) }
-
-    DisposableEffect(Unit) {
-        val listener = FirebaseAuth.AuthStateListener { auth ->
-            currentUser = auth.currentUser
-        }
-        Firebase.auth.addAuthStateListener(listener)
-        onDispose { Firebase.auth.removeAuthStateListener(listener) }
-    }
-
-    val user = currentUser
-    if (user == null) {
-        AuthScreen(
-            onAuthSuccess = { currentUser = Firebase.auth.currentUser }
-        )
-    } else {
-        key(user.uid) {
-            StudyPortalShell(
-                currentUserId = user.uid,
-                displayName = user.displayName ?: user.email ?: "Student",
-                isMidnightTheme = isMidnightTheme,
-                onToggleTheme = onToggleTheme
-            )
-        }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        deepLinkRouteState.value = intent.getStringExtra(ReminderDeepLink.EXTRA_TARGET_ROUTE)
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun StudyPortalShell(
-    currentUserId: String,
-    displayName: String,
-    isMidnightTheme: Boolean,
-    onToggleTheme: () -> Unit
+fun OmJarvisAppRoot(
+    vm: OmJarvisViewModel,
+    pendingDeepLinkRoute: String?,
+    onConsumeDeepLink: () -> Unit
 ) {
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    val credentialManager = remember(context) { CredentialManager.create(context) }
+    val settings by vm.settings.collectAsStateWithLifecycle()
+    val bundle by vm.bundle.collectAsStateWithLifecycle()
+    val isOnline by vm.isOnline.collectAsStateWithLifecycle()
+    val analytics by vm.analytics.collectAsStateWithLifecycle()
+    val topicProgressMap by vm.topicProgressMap.collectAsStateWithLifecycle()
+    val videos by vm.videos.collectAsStateWithLifecycle()
+    val catalogAudit by vm.catalogAudit.collectAsStateWithLifecycle()
+    val isAuditingCatalog by vm.isAuditingCatalog.collectAsStateWithLifecycle()
+    val flashcards by vm.flashcards.collectAsStateWithLifecycle()
+    val testAttempts by vm.testAttempts.collectAsStateWithLifecycle()
+    val scheduleSlots by vm.scheduleSlots.collectAsStateWithLifecycle()
+    val activeMockState by vm.activeMockState.collectAsStateWithLifecycle()
+    val selectedTopicId by vm.selectedTopicId.collectAsStateWithLifecycle()
+    val selectedPartFilter by vm.selectedPartFilter.collectAsStateWithLifecycle()
+    val mcqRunnerState by vm.mcqRunnerState.collectAsStateWithLifecycle()
+    val lastDescriptiveEval by vm.lastDescriptiveEval.collectAsStateWithLifecycle()
+    val tutorMessages by vm.tutorMessages.collectAsStateWithLifecycle()
+    val tutorLoading by vm.tutorLoading.collectAsStateWithLifecycle()
+    val feedbackBanner by vm.feedbackBanner.collectAsStateWithLifecycle()
 
-    val viewModel: StudyPortalViewModel = viewModel(
-        key = currentUserId,
-        factory = viewModelFactory {
-            initializer {
-                val app = checkNotNull(this[APPLICATION_KEY]) {
-                    "APPLICATION_KEY missing from CreationExtras"
-                }
-                val databaseId = app.getString(R.string.firestore_database_id)
-                val db = FirebaseFirestore.getInstance(databaseId)
-                StudyPortalViewModel(
-                    studyRepo = StudyRepository(db),
-                    aiRepo = AiTutorRepository(),
-                    currentUserId = currentUserId,
-                    initialDisplayName = displayName
-                )
+    if (!settings.onboardingCompleted) {
+        OmJarvisOnboardingScreen(
+            settings = settings,
+            daysRemaining = analytics.daysRemaining,
+            catalogAudit = catalogAudit,
+            isOnline = isOnline,
+            onRefreshVideoCatalog = { vm.refreshVideoCatalog() },
+            onCompleteOnboarding = { merit, dark, mins, notifs ->
+                vm.completeOnboarding(merit, dark, mins, notifs)
             }
-        }
-    )
-
-    val activeTab by viewModel.activeTab.collectAsStateWithLifecycle()
-    val fullScreenMode by viewModel.fullScreenMode.collectAsStateWithLifecycle()
-    val feedbackMessage by viewModel.feedbackMessage.collectAsStateWithLifecycle()
-    val summary by viewModel.dashboardSummary.collectAsStateWithLifecycle()
-    val materialsState by viewModel.materialsState.collectAsStateWithLifecycle()
-    val progressMapState by viewModel.progressMapState.collectAsStateWithLifecycle()
-    val studyPlansState by viewModel.studyPlansState.collectAsStateWithLifecycle()
-    val quizAttemptsState by viewModel.quizAttemptsState.collectAsStateWithLifecycle()
-    val planGenState by viewModel.planGenState.collectAsStateWithLifecycle()
-    val mcqGenState by viewModel.mcqGenState.collectAsStateWithLifecycle()
-    val quizSession by viewModel.quizSession.collectAsStateWithLifecycle()
-    val tutorMessages by viewModel.tutorMessages.collectAsStateWithLifecycle()
-    val tutorStreamingText by viewModel.tutorStreamingText.collectAsStateWithLifecycle()
-    val tutorState by viewModel.tutorState.collectAsStateWithLifecycle()
-    val tutorEngineMode by viewModel.tutorEngineMode.collectAsStateWithLifecycle()
-    val freeRefState by viewModel.freeRefState.collectAsStateWithLifecycle()
-    val freeRefResult by viewModel.freeRefResult.collectAsStateWithLifecycle()
-    val readerAiState by viewModel.readerAiState.collectAsStateWithLifecycle()
-    val flashcards by viewModel.flashcardsState.collectAsStateWithLifecycle()
-    val selectedDeckFilter by viewModel.selectedDeckFilter.collectAsStateWithLifecycle()
-    val flashcardGenState by viewModel.flashcardGenState.collectAsStateWithLifecycle()
-    val pomodoroState by viewModel.pomodoroState.collectAsStateWithLifecycle()
-    val dailyBriefPlan by viewModel.dailyBriefPlan.collectAsStateWithLifecycle()
-    val aiBriefText by viewModel.aiBriefText.collectAsStateWithLifecycle()
-    val briefState by viewModel.briefState.collectAsStateWithLifecycle()
-    val completedRoutineIds by viewModel.completedRoutineIds.collectAsStateWithLifecycle()
-    val weakTopics by viewModel.weakTopics.collectAsStateWithLifecycle()
-    val typingFeedbackMap by viewModel.typingFeedbackMap.collectAsStateWithLifecycle()
-    val typingGradingId by viewModel.typingGradingId.collectAsStateWithLifecycle()
-    val readerQuickReply by viewModel.readerQuickReply.collectAsStateWithLifecycle()
-    val readerQuickState by viewModel.readerQuickState.collectAsStateWithLifecycle()
-    val executiveAnalytics by viewModel.executiveAnalytics.collectAsStateWithLifecycle()
-
-    val snackbarHostState = remember { SnackbarHostState() }
-
-    LaunchedEffect(feedbackMessage) {
-        feedbackMessage?.let { msg ->
-            snackbarHostState.showSnackbar(msg)
-            viewModel.clearFeedback()
-        }
-    }
-
-    val isQuizVisible = (activeTab == PortalTab.MCQS && fullScreenMode == null) ||
-        fullScreenMode is FullScreenMode.McqExam
-    LaunchedEffect(isQuizVisible, quizSession.isSubmitted, quizSession.questions.size) {
-        while (isQuizVisible && !quizSession.isSubmitted && quizSession.questions.isNotEmpty()) {
-            delay(1000L)
-            viewModel.tickQuizElapsed()
-        }
-    }
-
-    val activeFullScreen = fullScreenMode
-    if (activeFullScreen != null) {
-        when (activeFullScreen) {
-            is FullScreenMode.ReadingViewer -> {
-                val progressMap = (progressMapState as? StreamUiState.Success)?.data ?: emptyMap()
-                FullScreenReadingViewer(
-                    material = activeFullScreen.material,
-                    openAsVideo = activeFullScreen.openAsVideo,
-                    progress = progressMap[activeFullScreen.material.id],
-                    readerAiState = readerAiState,
-                    onRunReaderAiAction = { action, selectedText, pageLabel, pageBitmap ->
-                        viewModel.runReaderAiAction(
-                            material = activeFullScreen.material,
-                            action = action,
-                            selectedText = selectedText,
-                            pageLabel = pageLabel,
-                            pageBitmap = pageBitmap
-                        )
-                    },
-                    onSwitchReaderAiAction = { action -> viewModel.switchReaderAiAction(action) },
-                    onRetryReaderAi = { viewModel.retryReaderAiAction() },
-                    onSaveReaderAiToNotes = { viewModel.saveReaderAiToNotes() },
-                    onContinueReaderAiInTutor = { viewModel.continueReaderAiInTutor() },
-                    onDismissReaderAi = { viewModel.dismissReaderAiSheet() },
-                    onToggleComplete = { completed, mins ->
-                        viewModel.toggleMaterialCompleted(activeFullScreen.material.id, completed, mins)
-                    },
-                    onSaveNotes = { notes ->
-                        viewModel.saveMaterialNotes(activeFullScreen.material.id, notes)
-                    },
-                    onAskTutor = { mat ->
-                        viewModel.launchTutorForMaterial(mat)
-                    },
-                    onGenerateFlashcards = { mat ->
-                        viewModel.generateFlashcardsFromMaterial(
-                            material = mat,
-                            cardCount = 6,
-                            launchFullScreen = true
-                        )
-                    },
-                    isGeneratingFlashcards = flashcardGenState is com.example.viewmodel.AiTaskState.Loading,
-                    readerQuickReply = readerQuickReply,
-                    readerQuickState = readerQuickState,
-                    onAskTeacherInReader = { mat, q, inUrdu ->
-                        viewModel.askTeacherFromReader(mat, q, inUrdu)
-                    },
-                    onClearReaderQuickReply = { viewModel.clearReaderQuickReply() },
-                    onExit = { viewModel.exitFullScreen() }
-                )
-            }
-            is FullScreenMode.McqExam -> {
-                FullScreenMcqExam(
-                    session = quizSession,
-                    onSelectOption = { qIdx, optIdx -> viewModel.selectQuizOption(qIdx, optIdx) },
-                    onSelectQuestionIndex = { idx -> viewModel.setQuizQuestionIndex(idx) },
-                    onResetQuiz = { viewModel.resetCurrentQuiz() },
-                    onSubmitQuiz = { viewModel.submitCurrentQuiz(fullScreenUsed = true) },
-                    onExit = { viewModel.exitFullScreen() }
-                )
-            }
-            is FullScreenMode.TutorStudio -> {
-                FullScreenTutorStudio(
-                    messages = tutorMessages,
-                    streamingText = tutorStreamingText,
-                    tutorState = tutorState,
-                    engineMode = tutorEngineMode,
-                    freeRefState = freeRefState,
-                    freeRefResult = freeRefResult,
-                    onSelectEngine = { mode -> viewModel.selectTutorEngine(mode) },
-                    onLookupWiki = { query -> viewModel.lookupWikipediaConcept(query) },
-                    onLookupDictionary = { word -> viewModel.lookupDictionaryTerm(word) },
-                    onDismissReference = { viewModel.dismissFreeReference() },
-                    onAskTutorAboutReference = { ref -> viewModel.askTutorAboutReference(ref) },
-                    onSendMessage = { text, bmp -> viewModel.sendTutorMessage(text, bmp) },
-                    onExit = { viewModel.exitFullScreen() }
-                )
-            }
-            is FullScreenMode.PomodoroFocus -> {
-                FullScreenPomodoroScreen(
-                    state = pomodoroState,
-                    onToggleRunPause = { viewModel.togglePomodoroRunPause() },
-                    onReset = { viewModel.resetPomodoro() },
-                    onSkipPhase = { viewModel.skipPomodoroPhase() },
-                    onSelectPhase = { phase -> viewModel.selectPomodoroPhase(phase) },
-                    onUpdateConfig = { work, shortBrk, longBrk, cycles, auto ->
-                        viewModel.updatePomodoroIntervals(work, shortBrk, longBrk, cycles, auto)
-                    },
-                    onExit = { viewModel.exitFullScreen() }
-                )
-            }
-            is FullScreenMode.RoadmapFocus -> {
-                val materials = (materialsState as? StreamUiState.Success)?.data ?: PreloadedMaterials.items
-                val progressMap = (progressMapState as? StreamUiState.Success)?.data ?: emptyMap()
-                val plansList = (studyPlansState as? StreamUiState.Success)?.data ?: emptyList()
-                val attemptsList = (quizAttemptsState as? StreamUiState.Success)?.data ?: emptyList()
-                FullScreenRoadmapScreen(
-                    materials = materials,
-                    progressMap = progressMap,
-                    plans = plansList,
-                    attempts = attemptsList,
-                    onOpenMaterial = { mat, asVideo -> viewModel.openMaterialInFullScreen(mat, asVideo) },
-                    onToggleMaterialComplete = { id, done, mins -> viewModel.toggleMaterialCompleted(id, done, mins) },
-                    onLaunchMcqBank = { bank -> viewModel.selectMcqBank(bank, launchFullScreen = true) },
-                    onTogglePlanItem = { id, done -> viewModel.toggleStudyPlanItem(id, done) },
-                    onExit = { viewModel.exitFullScreen() }
-                )
-            }
-            is FullScreenMode.FlashcardDeck -> {
-                FullScreenFlashcardScreen(
-                    flashcards = flashcards,
-                    selectedDeckFilter = selectedDeckFilter,
-                    onSelectDeckFilter = { filter -> viewModel.selectFlashcardDeck(filter) },
-                    onRecordReview = { card, mastered -> viewModel.recordFlashcardReview(card, mastered) },
-                    onAddCustomCard = { deck, matId, front, back, hint ->
-                        viewModel.addCustomFlashcard(deck, matId, front, back, hint)
-                    },
-                    onExit = { viewModel.exitFullScreen() }
-                )
-            }
-        }
+        )
         return
     }
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        val useNavigationRail = maxWidth >= 600.dp
+    val navController = rememberNavController()
+    val navBackStack by navController.currentBackStackEntryAsState()
+    val currentRoute = navBackStack?.destination?.route ?: JarvisNavDest.DASHBOARD.route
 
-        Scaffold(
-            contentWindowInsets = WindowInsets.safeDrawing,
-            snackbarHost = { SnackbarHost(snackbarHostState) },
-            topBar = {
-                TopAppBar(
-                    title = {
-                        Column {
-                            Text(
-                                text = "OM Merit Portal",
-                                style = MaterialTheme.typography.titleLarge,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "5 Dec Exam (${dailyBriefPlan.daysToExam}d) • Hi, ${displayName.substringBefore(' ')}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    },
-                    actions = {
-                        IconButton(
-                            onClick = onToggleTheme,
-                            modifier = Modifier.testTag("global_theme_toggle_button")
-                        ) {
-                            Icon(
-                                imageVector = if (isMidnightTheme) Icons.Rounded.LightMode else Icons.Rounded.DarkMode,
-                                contentDescription = if (isMidnightTheme) {
-                                    "Switch to High-Contrast Light Theme"
-                                } else {
-                                    "Switch to Midnight Theme"
-                                }
-                            )
-                        }
-                        IconButton(
-                            onClick = { viewModel.toggleFullScreenForActiveTab() },
-                            modifier = Modifier.testTag("topbar_fullscreen_toggle")
-                        ) {
-                            Icon(
-                                imageVector = Icons.Rounded.Fullscreen,
-                                contentDescription = "Toggle Full-Screen Mode for ${activeTab.label}"
-                            )
-                        }
-                        IconButton(
-                            onClick = {
-                                signOutUser(credentialManager, scope)
-                            },
-                            modifier = Modifier.testTag("sign_out_button")
-                        ) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Rounded.Logout,
-                                contentDescription = "Sign out"
-                            )
-                        }
-                    },
-                    colors = TopAppBarDefaults.topAppBarColors(
-                        containerColor = MaterialTheme.colorScheme.surface
-                    )
-                )
-            },
-            bottomBar = {
-                if (!useNavigationRail) {
-                    NavigationBar {
-                        PortalTab.entries.forEach { tab ->
-                            NavigationBarItem(
-                                selected = activeTab == tab,
-                                onClick = { viewModel.selectTab(tab) },
-                                icon = {
-                                    Icon(tabIcon(tab), contentDescription = tab.label)
-                                },
-                                label = { Text(tab.label) },
-                                modifier = Modifier.testTag("nav_${tab.name.lowercase()}")
-                            )
-                        }
-                    }
-                }
+    var syllabusInitialMode by remember { mutableStateOf(WorkspaceMode.READ) }
+    var syllabusOpenWorkspace by remember { mutableStateOf(false) }
+    var showReadinessDialog by remember { mutableStateOf(false) }
+    var showNotificationsDialog by remember { mutableStateOf(false) }
+
+    val drawerState = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(feedbackBanner) {
+        feedbackBanner?.let { msg ->
+            snackbarHostState.showSnackbar(msg)
+            vm.clearFeedback()
+        }
+    }
+
+    val navigateToRoute: (String) -> Unit = { route ->
+        if (route == JarvisNavDest.SYLLABUS.route) {
+            syllabusOpenWorkspace = false
+        } else if (route == JarvisNavDest.TOPICS.route) {
+            syllabusOpenWorkspace = true
+        }
+        navController.navigate(route) {
+            popUpTo(navController.graph.findStartDestination().id) {
+                saveState = true
             }
-        ) { innerPadding ->
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(innerPadding)
-            ) {
-                if (useNavigationRail) {
-                    NavigationRail(modifier = Modifier.fillMaxHeight()) {
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
+
+    // Handle WorkManager notification deep links cleanly
+    LaunchedEffect(pendingDeepLinkRoute) {
+        when (pendingDeepLinkRoute) {
+            ReminderDeepLink.ROUTE_CALL_JARVIS -> {
+                navController.navigate(JarvisNavDest.CALL_JARVIS.route) { launchSingleTop = true }
+                onConsumeDeepLink()
+            }
+            ReminderDeepLink.ROUTE_TEST -> {
+                navigateToRoute(JarvisNavDest.MCQ_TESTS.route)
+                onConsumeDeepLink()
+            }
+            ReminderDeepLink.ROUTE_MOCK -> {
+                navigateToRoute(JarvisNavDest.GRAND_TESTS.route)
+                onConsumeDeepLink()
+            }
+            ReminderDeepLink.ROUTE_FLASHCARDS -> {
+                navigateToRoute(JarvisNavDest.FLASHCARDS.route)
+                onConsumeDeepLink()
+            }
+            ReminderDeepLink.ROUTE_SYLLABUS -> {
+                navigateToRoute(JarvisNavDest.SYLLABUS.route)
+                onConsumeDeepLink()
+            }
+            ReminderDeepLink.ROUTE_BRIEF -> {
+                navigateToRoute(JarvisNavDest.DASHBOARD.route)
+                onConsumeDeepLink()
+            }
+        }
+    }
+
+    val compactBottomTabs = remember { JarvisNavDest.entries.filter { it.isCompactBottomTab } }
+    val weakIds = remember(analytics) { analytics.weakest5.map { it.topic.id }.toSet() }
+    val activeTopic = remember(bundle, selectedTopicId) {
+        bundle.topics.firstOrNull { it.id == selectedTopicId } ?: bundle.topics.firstOrNull()
+    }
+    val activeVideo = remember(videos, activeTopic) {
+        videos.firstOrNull { it.topicId == activeTopic?.id } ?: videos.firstOrNull()
+    }
+    val activeProgress = remember(topicProgressMap, activeTopic) {
+        activeTopic?.let { topicProgressMap[it.id] }
+    }
+    val todayKey = remember { SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) }
+    val dueFlashcardsCount = remember(flashcards) {
+        val now = System.currentTimeMillis()
+        flashcards.count { it.nextReviewAt <= now }
+    }
+    val pendingAlertsCount = remember(scheduleSlots, analytics, dueFlashcardsCount, todayKey) {
+        val pendingSlots = scheduleSlots.count { it.completedDateKey != todayKey }
+        val dueCards = if (dueFlashcardsCount > 0) 1 else 0
+        (pendingSlots.coerceAtMost(2) + dueCards).coerceAtLeast(if (analytics.weakest5.isNotEmpty()) 1 else 0)
+    }
+
+    val isCallScreen = currentRoute == JarvisNavDest.CALL_JARVIS.route
+
+    val contentBody: @Composable (Boolean) -> Unit = { isCompactPhone ->
+        NavHost(
+            navController = navController,
+            startDestination = JarvisNavDest.DASHBOARD.route,
+            modifier = Modifier.fillMaxSize()
+        ) {
+            composable(JarvisNavDest.DASHBOARD.route) {
+                JarvisDashboardScreen(
+                    settings = settings,
+                    analytics = analytics,
+                    activeTopic = activeTopic,
+                    activeVideo = activeVideo,
+                    activeProgress = activeProgress,
+                    showReadinessDialog = showReadinessDialog,
+                    onDismissReadinessDialog = { showReadinessDialog = false },
+                    onContinueStudy = {
+                        vm.selectTopic(settings.lastStudiedTopicId)
+                        syllabusInitialMode = WorkspaceMode.READ
+                        syllabusOpenWorkspace = true
+                        navigateToRoute(JarvisNavDest.TOPICS.route)
+                    },
+                    onOpenTopic = { topicId ->
+                        vm.selectTopic(topicId)
+                        syllabusInitialMode = WorkspaceMode.READ
+                        syllabusOpenWorkspace = true
+                        navigateToRoute(JarvisNavDest.TOPICS.route)
+                    },
+                    onFilterPart = { partCode ->
+                        vm.selectPartFilter(partCode)
+                        syllabusOpenWorkspace = false
+                        navigateToRoute(JarvisNavDest.SYLLABUS.route)
+                    },
+                    onOpenVideoWorkspace = {
+                        activeTopic?.let { vm.selectTopic(it.id) }
+                        navigateToRoute(JarvisNavDest.VIDEO_LIBRARY.route)
+                    },
+                    onOpenReadingWorkspace = {
+                        activeTopic?.let { vm.selectTopic(it.id) }
+                        syllabusInitialMode = WorkspaceMode.READ
+                        syllabusOpenWorkspace = true
+                        navigateToRoute(JarvisNavDest.TOPICS.route)
+                    },
+                    onSaveQuickNote = { topic, note ->
+                        vm.saveTopicNotesAndFlags(topic, notes = note)
+                    },
+                    onStartQuickTest = {
+                        vm.startAdaptiveMcqTest("Today's 10-MCQ Quick Drill", 10, timedExamMode = true)
+                        navigateToRoute(JarvisNavDest.MCQ_TESTS.route)
+                    },
+                    onStartWeakTest = {
+                        vm.startAdaptiveMcqTest("Weak-Topic Recovery Drill", 15, weakOnly = true, timedExamMode = true)
+                        navigateToRoute(JarvisNavDest.MCQ_TESTS.route)
+                    },
+                    onOpenFlashcards = { navigateToRoute(JarvisNavDest.FLASHCARDS.route) },
+                    onOpenVideos = { navigateToRoute(JarvisNavDest.VIDEO_LIBRARY.route) },
+                    onAskJarvis = { navigateToRoute(JarvisNavDest.JARVIS.route) },
+                    onCallJarvis = { navController.navigate(JarvisNavDest.CALL_JARVIS.route) { launchSingleTop = true } },
+                    onOpenMockExam = { navigateToRoute(JarvisNavDest.GRAND_TESTS.route) },
+                    onOpenAnalytics = { navigateToRoute(JarvisNavDest.ANALYTICS.route) }
+                )
+            }
+
+            composable(JarvisNavDest.SYLLABUS.route) {
+                SyllabusWorkspaceScreen(
+                    bundle = bundle,
+                    settings = settings,
+                    isOnline = isOnline,
+                    selectedPartFilter = selectedPartFilter,
+                    selectedTopicId = selectedTopicId,
+                    topicProgressMap = topicProgressMap,
+                    videos = videos,
+                    catalogAudit = catalogAudit,
+                    isAuditingCatalog = isAuditingCatalog,
+                    initialMode = syllabusInitialMode,
+                    initialWorkspaceOpen = false,
+                    onSelectPartFilter = { vm.selectPartFilter(it) },
+                    onSelectTopic = { vm.selectTopic(it) },
+                    onMoveRelativeTopic = { delta -> vm.moveRelativeTopic(delta) },
+                    onRecordReading = { t, pct, p, done -> vm.recordReadingProgress(t, pct, p, done) },
+                    onSaveNotesAndFlags = { t, n, h, bm, imp, rev ->
+                        vm.saveTopicNotesAndFlags(t, n, h, bm, imp, rev)
+                    },
+                    onVideoTick = { vidId, pos, dur, done -> vm.onVideoPlaybackTick(vidId, pos, dur, done) },
+                    onStartDownload = { vm.startOrResumeDownload(it) },
+                    onPauseDownload = { vm.pauseDownload(it) },
+                    onCancelDownload = { vm.cancelDownload(it) },
+                    onDeleteCachedVideo = { vm.deleteCachedVideo(it) },
+                    onRefreshVideoCatalog = { vm.refreshVideoCatalog() },
+                    onStartTopicMcq = { t ->
+                        vm.startAdaptiveMcqTest("Topic Drill: ${t.name}", 10, topicFilterId = t.id, timedExamMode = true)
+                        navigateToRoute(JarvisNavDest.MCQ_TESTS.route)
+                    },
+                    onAskJarvisForTopic = { t ->
+                        vm.selectTopic(t.id)
+                        vm.askJarvis("Explain ${t.name} clearly with Roman Urdu & Pakistani example.", TutorStyleRequest.DEFAULT_BILINGUAL, t)
+                        navigateToRoute(JarvisNavDest.JARVIS.route)
+                    },
+                    onUpdateSettings = { vm.updateSettings(it) }
+                )
+            }
+
+            composable(JarvisNavDest.TOPICS.route) {
+                SyllabusWorkspaceScreen(
+                    bundle = bundle,
+                    settings = settings,
+                    isOnline = isOnline,
+                    selectedPartFilter = selectedPartFilter,
+                    selectedTopicId = selectedTopicId,
+                    topicProgressMap = topicProgressMap,
+                    videos = videos,
+                    catalogAudit = catalogAudit,
+                    isAuditingCatalog = isAuditingCatalog,
+                    initialMode = syllabusInitialMode,
+                    initialWorkspaceOpen = true,
+                    onSelectPartFilter = { vm.selectPartFilter(it) },
+                    onSelectTopic = { vm.selectTopic(it) },
+                    onMoveRelativeTopic = { delta -> vm.moveRelativeTopic(delta) },
+                    onRecordReading = { t, pct, p, done -> vm.recordReadingProgress(t, pct, p, done) },
+                    onSaveNotesAndFlags = { t, n, h, bm, imp, rev ->
+                        vm.saveTopicNotesAndFlags(t, n, h, bm, imp, rev)
+                    },
+                    onVideoTick = { vidId, pos, dur, done -> vm.onVideoPlaybackTick(vidId, pos, dur, done) },
+                    onStartDownload = { vm.startOrResumeDownload(it) },
+                    onPauseDownload = { vm.pauseDownload(it) },
+                    onCancelDownload = { vm.cancelDownload(it) },
+                    onDeleteCachedVideo = { vm.deleteCachedVideo(it) },
+                    onRefreshVideoCatalog = { vm.refreshVideoCatalog() },
+                    onStartTopicMcq = { t ->
+                        vm.startAdaptiveMcqTest("Topic Drill: ${t.name}", 10, topicFilterId = t.id, timedExamMode = true)
+                        navigateToRoute(JarvisNavDest.MCQ_TESTS.route)
+                    },
+                    onAskJarvisForTopic = { t ->
+                        vm.selectTopic(t.id)
+                        vm.askJarvis("Explain ${t.name} clearly with Roman Urdu & Pakistani example.", TutorStyleRequest.DEFAULT_BILINGUAL, t)
+                        navigateToRoute(JarvisNavDest.JARVIS.route)
+                    },
+                    onUpdateSettings = { vm.updateSettings(it) }
+                )
+            }
+
+            composable(JarvisNavDest.STUDY_PLANNER.route) {
+                StudyPlannerScreen(
+                    settings = settings,
+                    scheduleSlots = scheduleSlots,
+                    todayMinutesLogged = analytics.todayMinutes,
+                    onToggleSlotDone = { vm.toggleScheduleSlotDone(it) },
+                    onSaveSlot = { vm.saveScheduleSlot(it) },
+                    onLogMinutes = { mins -> vm.logQuickMinutes(mins) },
+                    onOpenTopic = { topicId ->
+                        vm.selectTopic(topicId)
+                        syllabusInitialMode = WorkspaceMode.READ
+                        navigateToRoute(JarvisNavDest.TOPICS.route)
+                    },
+                    onCallJarvis = { navController.navigate(JarvisNavDest.CALL_JARVIS.route) { launchSingleTop = true } }
+                )
+            }
+
+            composable(JarvisNavDest.VIDEO_LIBRARY.route) {
+                VideoLibraryScreen(
+                    topics = bundle.topics,
+                    videos = videos,
+                    selectedTopicId = selectedTopicId,
+                    catalogAudit = catalogAudit,
+                    isAuditingCatalog = isAuditingCatalog,
+                    isOnline = isOnline,
+                    videoCacheSizeMb = vm.getVideoCacheSizeMb(),
+                    onSelectVideoTopic = { vm.selectTopic(it) },
+                    onMoveRelativeTopic = { delta -> vm.moveRelativeTopic(delta) },
+                    onVideoTick = { vidId, pos, dur, done -> vm.onVideoPlaybackTick(vidId, pos, dur, done) },
+                    onStartDownload = { vm.startOrResumeDownload(it) },
+                    onPauseDownload = { vm.pauseDownload(it) },
+                    onCancelDownload = { vm.cancelDownload(it) },
+                    onDeleteCachedVideo = { vm.deleteCachedVideo(it) },
+                    onRefreshVideoCatalog = { vm.refreshVideoCatalog() },
+                    onSaveQuickNote = { topic, note -> vm.saveTopicNotesAndFlags(topic, notes = note) },
+                    onAskJarvisForTopic = { t ->
+                        vm.selectTopic(t.id)
+                        vm.askJarvis("Explain ${t.name} video lecture key concepts in Roman Urdu.", TutorStyleRequest.DEFAULT_BILINGUAL, t)
+                        navigateToRoute(JarvisNavDest.JARVIS.route)
+                    }
+                )
+            }
+
+            composable(JarvisNavDest.FLASHCARDS.route) {
+                SmartFlashcardsScreen(
+                    flashcards = flashcards,
+                    topics = bundle.topics,
+                    weakTopicIds = weakIds,
+                    settings = settings,
+                    onReviewCard = { card, rating -> vm.reviewFlashcard(card, rating) },
+                    onAddCustomCard = { topic, f, b, h -> vm.addCustomFlashcard(topic, f, b, h) }
+                )
+            }
+
+            composable(JarvisNavDest.MCQ_TESTS.route) {
+                TestingAndMockScreen(
+                    bundle = bundle,
+                    runnerState = mcqRunnerState,
+                    activeMockState = activeMockState,
+                    testAttempts = testAttempts,
+                    lastDescriptiveEval = lastDescriptiveEval,
+                    initialTab = ExamLabTab.MCQS,
+                    onStartAdaptiveMcq = { title, cnt, tid, part, weak, timed ->
+                        vm.startAdaptiveMcqTest(title, cnt, tid, part, weak, timed)
+                    },
+                    onStartFullMock = { vm.startFullBookMockExam() },
+                    onResumeSavedMock = { vm.resumeSavedMockExam() },
+                    onSelectMcqOption = { qIdx, oIdx -> vm.selectMcqOption(qIdx, oIdx) },
+                    onJumpToQuestion = { vm.jumpToMcqIndex(it) },
+                    onToggleFlag = { vm.toggleFlagQuestion(it) },
+                    onToggleUnansweredFilter = { vm.toggleShowUnansweredOnly() },
+                    onSubmitMcqRunner = { vm.submitCurrentMcqRunner() },
+                    onExitMcqRunner = { vm.exitMcqRunner() },
+                    onEvaluateDescriptive = { tid, q, ans -> vm.evaluateDescriptiveAnswer(tid, q, ans) },
+                    onAskJarvisForQuestion = { topic, prompt ->
+                        if (topic != null) vm.selectTopic(topic.id)
+                        vm.askJarvis(prompt, TutorStyleRequest.EXAM_ANSWER, topic)
+                        navigateToRoute(JarvisNavDest.JARVIS.route)
+                    }
+                )
+            }
+
+            composable(JarvisNavDest.TYPING_PRACTICE.route) {
+                TestingAndMockScreen(
+                    bundle = bundle,
+                    runnerState = mcqRunnerState,
+                    activeMockState = activeMockState,
+                    testAttempts = testAttempts,
+                    lastDescriptiveEval = lastDescriptiveEval,
+                    initialTab = ExamLabTab.TYPING,
+                    onStartAdaptiveMcq = { title, cnt, tid, part, weak, timed ->
+                        vm.startAdaptiveMcqTest(title, cnt, tid, part, weak, timed)
+                    },
+                    onStartFullMock = { vm.startFullBookMockExam() },
+                    onResumeSavedMock = { vm.resumeSavedMockExam() },
+                    onSelectMcqOption = { qIdx, oIdx -> vm.selectMcqOption(qIdx, oIdx) },
+                    onJumpToQuestion = { vm.jumpToMcqIndex(it) },
+                    onToggleFlag = { vm.toggleFlagQuestion(it) },
+                    onToggleUnansweredFilter = { vm.toggleShowUnansweredOnly() },
+                    onSubmitMcqRunner = { vm.submitCurrentMcqRunner() },
+                    onExitMcqRunner = { vm.exitMcqRunner() },
+                    onEvaluateDescriptive = { tid, q, ans -> vm.evaluateDescriptiveAnswer(tid, q, ans) },
+                    onAskJarvisForQuestion = { topic, prompt ->
+                        if (topic != null) vm.selectTopic(topic.id)
+                        vm.askJarvis(prompt, TutorStyleRequest.EXAM_ANSWER, topic)
+                        navigateToRoute(JarvisNavDest.JARVIS.route)
+                    }
+                )
+            }
+
+            composable(JarvisNavDest.GRAND_TESTS.route) {
+                TestingAndMockScreen(
+                    bundle = bundle,
+                    runnerState = mcqRunnerState,
+                    activeMockState = activeMockState,
+                    testAttempts = testAttempts,
+                    lastDescriptiveEval = lastDescriptiveEval,
+                    initialTab = ExamLabTab.MOCK_EXAM,
+                    onStartAdaptiveMcq = { title, cnt, tid, part, weak, timed ->
+                        vm.startAdaptiveMcqTest(title, cnt, tid, part, weak, timed)
+                    },
+                    onStartFullMock = { vm.startFullBookMockExam() },
+                    onResumeSavedMock = { vm.resumeSavedMockExam() },
+                    onSelectMcqOption = { qIdx, oIdx -> vm.selectMcqOption(qIdx, oIdx) },
+                    onJumpToQuestion = { vm.jumpToMcqIndex(it) },
+                    onToggleFlag = { vm.toggleFlagQuestion(it) },
+                    onToggleUnansweredFilter = { vm.toggleShowUnansweredOnly() },
+                    onSubmitMcqRunner = { vm.submitCurrentMcqRunner() },
+                    onExitMcqRunner = { vm.exitMcqRunner() },
+                    onEvaluateDescriptive = { tid, q, ans -> vm.evaluateDescriptiveAnswer(tid, q, ans) },
+                    onAskJarvisForQuestion = { topic, prompt ->
+                        if (topic != null) vm.selectTopic(topic.id)
+                        vm.askJarvis(prompt, TutorStyleRequest.EXAM_ANSWER, topic)
+                        navigateToRoute(JarvisNavDest.JARVIS.route)
+                    }
+                )
+            }
+
+            composable(JarvisNavDest.PAST_PAPERS.route) {
+                TestingAndMockScreen(
+                    bundle = bundle,
+                    runnerState = mcqRunnerState,
+                    activeMockState = activeMockState,
+                    testAttempts = testAttempts,
+                    lastDescriptiveEval = lastDescriptiveEval,
+                    initialTab = ExamLabTab.PAST_PAPERS,
+                    onStartAdaptiveMcq = { title, cnt, tid, part, weak, timed ->
+                        vm.startAdaptiveMcqTest(title, cnt, tid, part, weak, timed)
+                    },
+                    onStartFullMock = { vm.startFullBookMockExam() },
+                    onResumeSavedMock = { vm.resumeSavedMockExam() },
+                    onSelectMcqOption = { qIdx, oIdx -> vm.selectMcqOption(qIdx, oIdx) },
+                    onJumpToQuestion = { vm.jumpToMcqIndex(it) },
+                    onToggleFlag = { vm.toggleFlagQuestion(it) },
+                    onToggleUnansweredFilter = { vm.toggleShowUnansweredOnly() },
+                    onSubmitMcqRunner = { vm.submitCurrentMcqRunner() },
+                    onExitMcqRunner = { vm.exitMcqRunner() },
+                    onEvaluateDescriptive = { tid, q, ans -> vm.evaluateDescriptiveAnswer(tid, q, ans) },
+                    onAskJarvisForQuestion = { topic, prompt ->
+                        if (topic != null) vm.selectTopic(topic.id)
+                        vm.askJarvis(prompt, TutorStyleRequest.EXAM_ANSWER, topic)
+                        navigateToRoute(JarvisNavDest.JARVIS.route)
+                    }
+                )
+            }
+
+            composable(JarvisNavDest.JARVIS.route) {
+                JarvisTeacherScreen(
+                    settings = settings,
+                    isOnline = isOnline,
+                    activeTopic = activeTopic,
+                    messages = tutorMessages,
+                    isLoading = tutorLoading,
+                    onAskJarvis = { q, style -> vm.askJarvis(q, style) },
+                    onClearChat = { vm.clearTutorChat() },
+                    onLaunchCallJarvis = { navController.navigate(JarvisNavDest.CALL_JARVIS.route) { launchSingleTop = true } },
+                    onShowFeedback = { vm.showFeedback(it) }
+                )
+            }
+
+            composable(JarvisNavDest.CALL_JARVIS.route) {
+                CallJarvisScreen(
+                    settings = settings,
+                    analytics = analytics,
+                    topics = bundle.topics,
+                    onExitCall = { navController.popBackStack() },
+                    onLogSessionMinutes = { mins -> vm.logQuickMinutes(mins, "CALL_JARVIS") },
+                    onShowFeedback = { vm.showFeedback(it) }
+                )
+            }
+
+            composable(JarvisNavDest.ANALYTICS.route) {
+                AnalyticsScreen(
+                    analytics = analytics,
+                    onBack = { navController.popBackStack() },
+                    onOpenTopic = { topicId ->
+                        vm.selectTopic(topicId)
+                        navigateToRoute(JarvisNavDest.TOPICS.route)
+                    }
+                )
+            }
+
+            composable(JarvisNavDest.SEARCH.route) {
+                GlobalSearchScreen(
+                    onSearch = { q -> vm.searchAll(q) },
+                    onOpenTopic = { topicId ->
+                        vm.selectTopic(topicId)
+                        navigateToRoute(JarvisNavDest.TOPICS.route)
+                    },
+                    onOpenFlashcards = { navigateToRoute(JarvisNavDest.FLASHCARDS.route) },
+                    onOpenPastPapers = { navigateToRoute(JarvisNavDest.PAST_PAPERS.route) },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+
+            composable(JarvisNavDest.SETTINGS.route) {
+                SettingsBackupScreen(
+                    settings = settings,
+                    catalogAudit = catalogAudit,
+                    videoCacheMb = vm.getVideoCacheSizeMb(),
+                    getMaskedKey = { prov -> vm.getMaskedApiKey(prov) },
+                    onUpdateSettings = { vm.updateSettings(it) },
+                    onSaveApiKey = { p, k, m, e -> vm.saveEncryptedApiKey(p, k, m, e) },
+                    onClearApiKey = { p -> vm.clearEncryptedApiKey(p) },
+                    onRefreshVideoCatalog = { vm.refreshVideoCatalog() },
+                    onClearVideoCache = { vm.clearAllCachedVideos() },
+                    onTriggerTestReminder = { type -> vm.triggerTestReminder(type) },
+                    onExportJson = { vm.exportBackupJson() },
+                    onImportJson = { raw -> vm.importBackupJson(raw) },
+                    onResetProgress = { vm.resetAllProgressConfirmed() },
+                    onShowFeedback = { vm.showFeedback(it) },
+                    onBack = { navController.popBackStack() }
+                )
+            }
+        }
+    }
+
+    JarvisSpaceBackdrop(darkMode = settings.darkThemeEnabled) {
+        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+            val isWideHud = maxWidth >= 840.dp
+
+            if (isWideHud) {
+                Scaffold(
+                    containerColor = Color.Transparent,
+                    contentWindowInsets = WindowInsets.safeDrawing,
+                    snackbarHost = { SnackbarHost(snackbarHostState) }
+                ) { innerPadding ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(innerPadding)
+                    ) {
+                        if (!isCallScreen) {
+                            JarvisSidebarPanel(
+                                currentRoute = currentRoute,
+                                meritModeEnabled = settings.meritModeEnabled,
+                                onSelectRoute = { route -> navigateToRoute(route) },
+                                onToggleMeritMode = { enabled ->
+                                    vm.updateSettings { it.copy(meritModeEnabled = enabled) }
+                                },
+                                modifier = Modifier.width(216.dp)
+                            )
+                        }
                         Column(
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                            modifier = Modifier.padding(top = 12.dp)
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
                         ) {
-                            PortalTab.entries.forEach { tab ->
-                                NavigationRailItem(
-                                    selected = activeTab == tab,
-                                    onClick = { viewModel.selectTab(tab) },
-                                    icon = { Icon(tabIcon(tab), contentDescription = tab.label) },
-                                    label = { Text(tab.label) },
-                                    modifier = Modifier.testTag("rail_${tab.name.lowercase()}")
+                            if (!isCallScreen) {
+                                JarvisTopHudHeader(
+                                    isCompactPhone = false,
+                                    settings = settings,
+                                    analytics = analytics,
+                                    unreadAlertsCount = pendingAlertsCount,
+                                    onOpenDrawer = {},
+                                    onClickReadiness = { showReadinessDialog = true },
+                                    onClickNotifications = { showNotificationsDialog = true },
+                                    onOpenSearch = { navController.navigate(JarvisNavDest.SEARCH.route) { launchSingleTop = true } },
+                                    onOpenSettings = { navigateToRoute(JarvisNavDest.SETTINGS.route) },
+                                    onToggleTheme = { vm.toggleTheme() }
                                 )
+                            }
+                            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                                contentBody(false)
                             }
                         }
                     }
                 }
-
-                Box(modifier = Modifier.weight(1f).fillMaxHeight()) {
-                    Crossfade(targetState = activeTab, label = "tab_crossfade") { tab ->
-                        when (tab) {
-                            PortalTab.DASHBOARD -> DashboardScreen(
-                                summary = summary,
-                                pomodoroState = pomodoroState,
-                                materialsState = materialsState,
-                                progressMapState = progressMapState,
-                                plansState = studyPlansState,
-                                attemptsState = quizAttemptsState,
-                                planGenState = planGenState,
-                                dailyBriefPlan = dailyBriefPlan,
-                                aiBriefText = aiBriefText,
-                                briefState = briefState,
-                                completedRoutineIds = completedRoutineIds,
-                                weakTopics = weakTopics,
-                                executiveAnalytics = executiveAnalytics,
-                                onStudyPortion = { portion -> viewModel.launchPortionStudy(portion) },
-                                onTestPortion = { portion -> viewModel.launchPortionTest(portion) },
-                                onSelectEnergyMode = { mode -> viewModel.selectEnergyMode(mode) },
-                                onToggleRoutineSlot = { slotId -> viewModel.toggleRoutineSlot(slotId) },
-                                onGenerateAiBrief = { viewModel.generateAiBrief() },
-                                onLaunchRoutineAction = { type, focus -> viewModel.launchRoutineAction(type, focus) },
-                                onTogglePomodoro = { viewModel.togglePomodoroRunPause() },
-                                onResetPomodoro = { viewModel.resetPomodoro() },
-                                onSkipPomodoro = { viewModel.skipPomodoroPhase() },
-                                onSelectPomodoroPhase = { phase -> viewModel.selectPomodoroPhase(phase) },
-                                onUpdatePomodoroConfig = { work, shortBrk, longBrk, cycles, auto ->
-                                    viewModel.updatePomodoroIntervals(work, shortBrk, longBrk, cycles, auto)
+            } else {
+                ModalNavigationDrawer(
+                    drawerState = drawerState,
+                    gesturesEnabled = !isCallScreen,
+                    drawerContent = {
+                        ModalDrawerSheet(
+                            drawerContainerColor = JarvisSidebarSurface,
+                            modifier = Modifier.width(268.dp)
+                        ) {
+                            JarvisSidebarPanel(
+                                currentRoute = currentRoute,
+                                meritModeEnabled = settings.meritModeEnabled,
+                                onSelectRoute = { route ->
+                                    scope.launch { drawerState.close() }
+                                    navigateToRoute(route)
                                 },
-                                onLaunchFullScreenPomodoro = {
-                                    viewModel.enterFullScreen(FullScreenMode.PomodoroFocus)
+                                onToggleMeritMode = { enabled ->
+                                    vm.updateSettings { it.copy(meritModeEnabled = enabled) }
                                 },
-                                onUpdateGoal = { goal, mins -> viewModel.updateStudyGoal(goal, mins) },
-                                onLogMinutes = { mins -> viewModel.logQuickStudySession(mins) },
-                                onAddPlanItem = { t, topic, day, mins ->
-                                    viewModel.addStudyPlanItem(t, topic, day, mins)
-                                },
-                                onTogglePlanItem = { id, done -> viewModel.toggleStudyPlanItem(id, done) },
-                                onDeletePlanItem = { id -> viewModel.deleteStudyPlanItem(id) },
-                                onGenerateAiPlan = { goal -> viewModel.generateAiStudyPlan(goal) },
-                                onLaunchFullScreenMaterial = { mat, asVideo ->
-                                    viewModel.openMaterialInFullScreen(mat, asVideo)
-                                },
-                                onToggleMaterialComplete = { id, done, mins ->
-                                    viewModel.toggleMaterialCompleted(id, done, mins)
-                                },
-                                onLaunchMcqBank = { bank ->
-                                    viewModel.selectMcqBank(bank, launchFullScreen = true)
-                                },
-                                onLaunchFullScreenRoadmap = {
-                                    viewModel.enterFullScreen(FullScreenMode.RoadmapFocus)
-                                },
-                                onLaunchFullScreenMcq = { viewModel.startCurrentMcqFullScreen() },
-                                onLaunchFullScreenFlashcards = { viewModel.openFlashcardsFullScreen() },
-                                onLaunchFullScreenTutor = {
-                                    viewModel.enterFullScreen(FullScreenMode.TutorStudio())
+                                modifier = Modifier.fillMaxSize()
+                            )
+                        }
+                    }
+                ) {
+                    Scaffold(
+                        containerColor = Color.Transparent,
+                        contentWindowInsets = WindowInsets.safeDrawing,
+                        snackbarHost = { SnackbarHost(snackbarHostState) },
+                        topBar = {
+                            if (!isCallScreen) {
+                                JarvisTopHudHeader(
+                                    isCompactPhone = true,
+                                    settings = settings,
+                                    analytics = analytics,
+                                    unreadAlertsCount = pendingAlertsCount,
+                                    onOpenDrawer = { scope.launch { drawerState.open() } },
+                                    onClickReadiness = { showReadinessDialog = true },
+                                    onClickNotifications = { showNotificationsDialog = true },
+                                    onOpenSearch = { navController.navigate(JarvisNavDest.SEARCH.route) { launchSingleTop = true } },
+                                    onOpenSettings = { navigateToRoute(JarvisNavDest.SETTINGS.route) },
+                                    onToggleTheme = { vm.toggleTheme() }
+                                )
+                            }
+                        },
+                        bottomBar = {
+                            if (!isCallScreen) {
+                                NavigationBar(
+                                    containerColor = JarvisSidebarSurface.copy(alpha = 0.96f),
+                                    contentColor = JarvisTextPrimary
+                                ) {
+                                    compactBottomTabs.forEach { dest ->
+                                        val shortLabel = when (dest) {
+                                            JarvisNavDest.VIDEO_LIBRARY -> "Videos"
+                                            JarvisNavDest.MCQ_TESTS -> "Tests"
+                                            JarvisNavDest.JARVIS -> "Jarvis"
+                                            else -> dest.label
+                                        }
+                                        NavigationBarItem(
+                                            selected = currentRoute == dest.route,
+                                            onClick = { navigateToRoute(dest.route) },
+                                            icon = { Icon(dest.icon, contentDescription = dest.label) },
+                                            label = {
+                                                Text(
+                                                    text = shortLabel,
+                                                    maxLines = 1,
+                                                    overflow = TextOverflow.Ellipsis
+                                                )
+                                            },
+                                            colors = NavigationBarItemDefaults.colors(
+                                                selectedIconColor = JarvisCyanGlow,
+                                                selectedTextColor = JarvisCyanGlow,
+                                                indicatorColor = JarvisElectricBlue.copy(alpha = 0.35f),
+                                                unselectedIconColor = JarvisTextSecondary,
+                                                unselectedTextColor = JarvisTextSecondary
+                                            ),
+                                            modifier = Modifier.testTag("nav_${dest.route}")
+                                        )
+                                    }
                                 }
-                            )
-                            PortalTab.MATERIALS -> MaterialsScreen(
-                                materialsState = materialsState,
-                                progressMapState = progressMapState,
-                                onOpenFullScreen = { mat, asVideo ->
-                                    viewModel.openMaterialInFullScreen(mat, asVideo)
-                                },
-                                onAskTutor = { mat -> viewModel.launchTutorForMaterial(mat) },
-                                onGenerateFlashcards = { mat ->
-                                    viewModel.selectTab(PortalTab.FLASHCARDS)
-                                    viewModel.generateFlashcardsFromMaterial(
-                                        material = mat,
-                                        cardCount = 6,
-                                        launchFullScreen = false
-                                    )
-                                },
-                                onToggleComplete = { id, done, mins ->
-                                    viewModel.toggleMaterialCompleted(id, done, mins)
-                                },
-                                onAddCustomMaterial = { title, desc, type, url, notes, cat, mins ->
-                                    viewModel.addCustomMaterial(title, desc, type, url, notes, cat, mins)
-                                },
-                                onDeleteCustomMaterial = { id -> viewModel.deleteCustomMaterial(id) }
-                            )
-                            PortalTab.FLASHCARDS -> FlashcardsScreen(
-                                flashcards = flashcards,
-                                selectedDeckFilter = selectedDeckFilter,
-                                materialsState = materialsState,
-                                flashcardGenState = flashcardGenState,
-                                onSelectDeckFilter = { filter -> viewModel.selectFlashcardDeck(filter) },
-                                onRecordReview = { card, mastered -> viewModel.recordFlashcardReview(card, mastered) },
-                                onDeleteCard = { card -> viewModel.deleteFlashcard(card) },
-                                onGenerateFromMaterial = { mat, excerpt, count, fs ->
-                                    viewModel.generateFlashcardsFromMaterial(mat, excerpt, count, fs)
-                                },
-                                onAddCustomCard = { deck, matId, front, back, hint ->
-                                    viewModel.addCustomFlashcard(deck, matId, front, back, hint)
-                                },
-                                onOpenFullScreen = { viewModel.openFlashcardsFullScreen() }
-                            )
-                            PortalTab.MCQS -> McqScreen(
-                                mcqGenState = mcqGenState,
-                                quizSession = quizSession,
-                                attemptsState = quizAttemptsState,
-                                typingFeedbackMap = typingFeedbackMap,
-                                typingGradingId = typingGradingId,
-                                onGradeTypingAnswer = { q, ans -> viewModel.gradeTypingAnswer(q, ans) },
-                                onSelectMcqBank = { bank, fs ->
-                                    viewModel.selectMcqBank(bank, fs)
-                                },
-                                onGenerateAndStartFullScreen = { topic, notes, count, fs ->
-                                    viewModel.generateAndStartMcqQuiz(topic, notes, count, fs)
-                                },
-                                onStartCurrentFullScreen = { viewModel.startCurrentMcqFullScreen() },
-                                onSelectOption = { qIdx, optIdx -> viewModel.selectQuizOption(qIdx, optIdx) },
-                                onSelectQuestionIndex = { idx -> viewModel.setQuizQuestionIndex(idx) },
-                                onResetQuiz = { viewModel.resetCurrentQuiz() },
-                                onSubmitQuiz = { viewModel.submitCurrentQuiz(fullScreenUsed = false) }
-                            )
-                            PortalTab.TUTOR -> TutorScreen(
-                                messages = tutorMessages,
-                                streamingText = tutorStreamingText,
-                                tutorState = tutorState,
-                                engineMode = tutorEngineMode,
-                                freeRefState = freeRefState,
-                                freeRefResult = freeRefResult,
-                                isFullScreen = false,
-                                onToggleFullScreen = {
-                                    viewModel.enterFullScreen(FullScreenMode.TutorStudio())
-                                },
-                                onSelectEngine = { mode -> viewModel.selectTutorEngine(mode) },
-                                onLookupWiki = { query -> viewModel.lookupWikipediaConcept(query) },
-                                onLookupDictionary = { word -> viewModel.lookupDictionaryTerm(word) },
-                                onDismissReference = { viewModel.dismissFreeReference() },
-                                onAskTutorAboutReference = { ref -> viewModel.askTutorAboutReference(ref) },
-                                onSendMessage = { text, bmp -> viewModel.sendTutorMessage(text, bmp) }
-                            )
+                            }
+                        }
+                    ) { innerPadding ->
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(innerPadding)
+                        ) {
+                            contentBody(true)
                         }
                     }
                 }
             }
         }
     }
-}
 
-private fun tabIcon(tab: PortalTab) = when (tab) {
-    PortalTab.DASHBOARD -> Icons.Rounded.Dashboard
-    PortalTab.MATERIALS -> Icons.Rounded.FolderCopy
-    PortalTab.FLASHCARDS -> Icons.Rounded.Style
-    PortalTab.MCQS -> Icons.Rounded.Quiz
-    PortalTab.TUTOR -> Icons.Rounded.AutoAwesome
+    if (showNotificationsDialog) {
+        val pendingSlots = scheduleSlots.filter { it.completedDateKey != todayKey }.take(4)
+        AlertDialog(
+            onDismissRequest = { showNotificationsDialog = false },
+            title = { Text("OM Jarvis Study Alerts", fontWeight = FontWeight.Bold) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        text = "Exam Countdown: ${analytics.daysRemaining} days left • Merit Target: ${if (settings.meritModeEnabled) "80%+" else "70%+"}",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = JarvisGold
+                    )
+                    if (dueFlashcardsCount > 0) {
+                        Text("• $dueFlashcardsCount spaced-repetition flashcards due today")
+                    }
+                    if (analytics.weakest5.isNotEmpty()) {
+                        Text("• Weakest Area Alert: ${analytics.weakest5.first().topic.name} (${analytics.weakest5.first().masteryPercent}%)")
+                    }
+                    pendingSlots.forEach { slot ->
+                        Text("• ${slot.startTime} — ${slot.title}")
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showNotificationsDialog = false
+                        navigateToRoute(JarvisNavDest.STUDY_PLANNER.route)
+                    }
+                ) { Text("Open Planner") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showNotificationsDialog = false }) { Text("Dismiss") }
+            }
+        )
+    }
 }

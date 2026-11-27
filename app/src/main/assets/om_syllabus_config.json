@@ -1,0 +1,590 @@
+{
+  "examName": "ICMA Pakistan Managerial Level-1 — M3 Organizational Management",
+  "examDate": "2026-12-07",
+  "studentName": "Saifullah Qureshi",
+  "goal": "CERTIFICATE OF MERIT",
+  "videoBaseUrl": "https://raw.githubusercontent.com/saifullahqureshi6100/ICMAP-Portal/main/public/videos/",
+  "parts": [
+    {
+      "code": "PART_A",
+      "title": "Operations Management",
+      "weightPercent": 35,
+      "units": "Units 1–7",
+      "topics": [
+        {
+          "id": "om_u01_enterprise",
+          "unit": 1,
+          "name": "Enterprise Management & Value Chain",
+          "videoFilename": "enterprise_management.mp4",
+          "pdfPage": 8,
+          "importance": "HIGH",
+          "difficulty": "MEDIUM",
+          "formulae": "Value Margin = Perceived Customer Value - Total Cost of Activities",
+          "description": "How organizations convert inputs into competitive goods/services across primary and support value-chain activities.",
+          "keyPoints": [
+            "Primary activities: Inbound logistics, Operations, Outbound, Marketing/Sales, Service.",
+            "Support activities: Firm infrastructure, HR, Technology development, Procurement.",
+            "Aligning ESG and digital transformation across operational workflows."
+          ],
+          "romanUrduSummary": "Enterprise Management ka matlab inputs (raw material, staff, IT) ko efficient process ke zariye customer ke liye high-value product ya service mein badalna hai. Porter Value Chain exam mein bohat poochi jaati hai.",
+          "pakistaniExample": "PTCL aur Systems Limited apni customer support aur fiber operations ko integrate kar ke operational waste kam karte hain."
+        },
+        {
+          "id": "om_u01_pestel",
+          "unit": 1,
+          "name": "PESTEL Analysis & ESG Challenges",
+          "videoFilename": "u01_01_pestel_analysis.mp4",
+          "pdfPage": 10,
+          "importance": "CRITICAL",
+          "difficulty": "EASY",
+          "formulae": "P-E-S-T-E-L + Environmental-Social-Governance (ESG)",
+          "description": "Macro-environmental scanning framework covering Political, Economic, Social, Technological, Environmental, and Legal forces.",
+          "keyPoints": [
+            "Political: tax policy, stability, tariffs.",
+            "Economic: SBP policy rate, PKR inflation, GDP growth.",
+            "Environmental: carbon compliance, recycling, ISO 14000.",
+            "2025 Syllabus update: ESG reporting and digital transformation risks."
+          ],
+          "romanUrduSummary": "PESTEL kisi bhi business ke bahar ke 6 bade factors check karta hai: Political, Economic, Social, Technological, Environmental aur Legal. Exam mein aksar SBP interest rate (Economic) aur climate rules (Environmental) par MCQs aate hain.",
+          "pakistaniExample": "Pakistan ke textile exporters (e.g., Interloop) EU buyers ke liye green energy aur ESG compliance report karte hain."
+        },
+        {
+          "id": "om_u02_mintzberg",
+          "unit": 2,
+          "name": "Mintzberg's 5 Organizational Parts",
+          "videoFilename": "",
+          "pdfPage": 19,
+          "importance": "CRITICAL",
+          "difficulty": "MEDIUM",
+          "formulae": "5 Parts: Strategic Apex | Middle Line | Operating Core | Technostructure | Support Staff",
+          "description": "Henry Mintzberg's structural configuration showing how authority, standardization, and frontline delivery interact (Past Paper Q.6).",
+          "keyPoints": [
+            "Strategic Apex: Top board/CEO setting overall strategy.",
+            "Middle Line: Regional/branch managers linking apex to frontline.",
+            "Operating Core: Staff directly producing goods/services.",
+            "Technostructure: Management accountants & HR analysts standardizing work.",
+            "Support Staff: Legal, PR, cafeteria outside direct operational flow."
+          ],
+          "romanUrduSummary": "Past Paper Q.6 ka pakka sawal! Mintzberg ke 5 hissay: Strategic Apex (CEO), Middle Line (managers), Operating Core (asal kaam karne walay), Technostructure (systems/standards banane walay jaise ICMA accountants), aur Support Staff (canteen/legal).",
+          "pakistaniExample": "Bank Alfalah mein Branch Tellers Operating Core hain, Region Heads Middle Line, CEO Strategic Apex, aur Cost/Risk Accountants Technostructure hain."
+        },
+        {
+          "id": "om_u03_production",
+          "unit": 3,
+          "name": "Production Systems & Additive Manufacturing (3D)",
+          "videoFilename": "u03_02_additive_manufacturing.mp4",
+          "pdfPage": 30,
+          "importance": "HIGH",
+          "difficulty": "MEDIUM",
+          "formulae": "Volume vs Variety Matrix: Job -> Batch -> Flow/Process + 3D Additive",
+          "description": "Comparison of Job, Batch, Process/Flow systems alongside layer-by-layer 3D additive manufacturing.",
+          "keyPoints": [
+            "Job: High variety, unique custom item (ship, tailored suit), high unit cost.",
+            "Batch: Groups of identical items (bakery, pharma tablets), setup changeover needed.",
+            "Process/Flow: Continuous 24/7 high volume (cement, oil refinery).",
+            "3D Printing: CAD-driven layer-by-layer build with minimal scrap waste."
+          ],
+          "romanUrduSummary": "Job production aik unique cheez banati hai (custom house). Batch groups mein banati hai (bakery bread). Flow lagatar chalti hai (sugar mill). 3D Printing digital file se layer-by-layer parts banati hai aur waste almost zero hoti hai.",
+          "pakistaniExample": "Sialkot ke customized surgical instruments Job/Batch mein bante hain jabke Lucky Cement Continuous Flow process use karta hai."
+        },
+        {
+          "id": "om_u04_5s",
+          "unit": 4,
+          "name": "5S Workplace Organization Methodology",
+          "videoFilename": "u04_01_5s_methodology.mp4",
+          "pdfPage": 37,
+          "importance": "HIGH",
+          "difficulty": "EASY",
+          "formulae": "Seiri (Sort) + Seiton (Set) + Seiso (Shine) + Seiketsu (Standardize) + Shitsuke (Sustain)",
+          "description": "Lean Japanese visual workplace discipline eliminating clutter, motion waste, and hidden defects.",
+          "keyPoints": [
+            "Sort: Remove unneeded tools/files.",
+            "Set in Order: Everything has a labelled home.",
+            "Shine: Clean and inspect daily to catch leaks/faults early.",
+            "Standardize & Sustain: Color codes, audits, and habit discipline."
+          ],
+          "romanUrduSummary": "5S Lean ka foundation hai: Sort (faltu hatana), Set in Order (tarteeb dena), Shine (safai + inspection), Standardize (uniform rules), Sustain (aadat banana).",
+          "pakistaniExample": "Indus Motor (Toyota Pakistan) ki assembly line par har tool shadow-board mein 5S ke mutabiq rakha hota hai."
+        },
+        {
+          "id": "om_u04_tpm",
+          "unit": 4,
+          "name": "TPM 8 Pillars & Plant Maintenance",
+          "videoFilename": "u04_02_tpm_8_pillars.mp4",
+          "pdfPage": 39,
+          "importance": "HIGH",
+          "difficulty": "MEDIUM",
+          "formulae": "Preventive vs Predictive vs Breakdown Maintenance",
+          "description": "Total Productive Maintenance empowering operators alongside engineers to achieve zero breakdowns and zero defects.",
+          "keyPoints": [
+            "Autonomous maintenance: Operators perform daily cleaning & lubrication.",
+            "Planned/Predictive maintenance: Vibration/thermal sensors catch failure before breakdown.",
+            "Goal: Zero accidents, zero defects, zero unplanned downtime."
+          ],
+          "romanUrduSummary": "TPM ka maqsad machines ka zero breakdown hai. Operator khud daily machine clean/check karta hai (Autonomous Maintenance) aur engineers predictive sensors se fault pehle pakad lete hain.",
+          "pakistaniExample": "Engro Fertilizers scheduled turnaround aur predictive sensor maintenance use karta hai taa ke plant emergency shutdown na ho."
+        },
+        {
+          "id": "om_u04_oee",
+          "unit": 4,
+          "name": "Overall Equipment Effectiveness (OEE)",
+          "videoFilename": "u04_03_oee_explained.mp4",
+          "pdfPage": 42,
+          "importance": "CRITICAL",
+          "difficulty": "MEDIUM",
+          "formulae": "OEE = Availability × Performance × Quality (World-Class >= 85%)",
+          "description": "Standard TPM metric capturing Six Big Losses across availability, cycle speed, and first-pass quality.",
+          "keyPoints": [
+            "Availability = Operating Time ÷ Planned Production Time.",
+            "Performance = (Ideal Cycle Time × Total Count) ÷ Operating Time.",
+            "Quality = Good Count ÷ Total Count.",
+            "Multiply all three ratios (never add)."
+          ],
+          "romanUrduSummary": "OEE = Availability × Performance × Quality. Teenon ko zarb (multiply) karte hain, jama nahi! Example: 0.90 × 0.95 × 0.98 = 83.8% OEE.",
+          "pakistaniExample": "Agar Lahore ki packaging factory ki machine 90% time chalay, 90% speed par, aur 95% sahi cartons banaye to OEE = 76.95%."
+        },
+        {
+          "id": "om_u05_mrp_erp",
+          "unit": 5,
+          "name": "MRP, MRP-II & ERP Systems (Past Paper Q.10)",
+          "videoFilename": "u05_01_mrp_vs_erp.mp4",
+          "pdfPage": 49,
+          "importance": "CRITICAL",
+          "difficulty": "MEDIUM",
+          "formulae": "MRP Inputs: MPS + BOM + Inventory Status",
+          "description": "Computerized production/inventory planning vs enterprise-wide Finance/HR/Supply Chain ERP integration.",
+          "keyPoints": [
+            "Past Paper Q.10 Benefits of MRP: Meet customer orders, lower stock holding, quick schedule updates, early bottleneck warning, closer supplier ties.",
+            "MRP inputs: Master Production Schedule, Bill of Materials, Inventory Records.",
+            "ERP integrates Finance, Operations, HR, and Sales on one live database."
+          ],
+          "romanUrduSummary": "Past Paper Q.10! MRP teen cheezon se chalta hai: MPS (kya banana hai), BOM (ingredients list) aur Stock records. Is se stock kam rakha jata hai aur bottleneck pehle pata chal jata hai. ERP poore office (Accounts+HR+Factory) ko aik software mein jorta hai.",
+          "pakistaniExample": "PTCL aur Packages Ltd SAP ERP use karte hain jahan procurement, finance ledger aur warehouse stock real-time sync hota hai."
+        },
+        {
+          "id": "om_u05_opt",
+          "unit": 5,
+          "name": "Theory of Constraints & OPT (Drum-Buffer-Rope)",
+          "videoFilename": "u05_02_theory_of_constraints.mp4",
+          "pdfPage": 54,
+          "importance": "CRITICAL",
+          "difficulty": "HARD",
+          "formulae": "Drum = Bottleneck Pace | Buffer = Pre-Bottleneck Time/Stock | Rope = Material Release Signal",
+          "description": "Goldratt's Theory of Constraints optimizing throughput around binding operational bottlenecks.",
+          "keyPoints": [
+            "1 hour lost at a bottleneck = 1 hour lost for the entire factory.",
+            "1 hour saved at a non-bottleneck adds zero throughput.",
+            "Use Drum-Buffer-Rope to protect bottleneck utilization."
+          ],
+          "romanUrduSummary": "OPT / Theory of Constraints kehta hai poori factory ki speed uski sab se slow machine (Bottleneck) tay karti hai. Drum = bottleneck speed, Buffer = bottleneck ke aagay safe stock, Rope = piche se raw material slow chhodna taa ke bheed na lage.",
+          "pakistaniExample": "Agar Nadra office mein biometric counter bottleneck ho to verification counters tez chalane ka faida nahi jab tak biometric queue fast na ho."
+        },
+        {
+          "id": "om_u05_jit",
+          "unit": 5,
+          "name": "Just-In-Time (JIT) Inventory & Supply Chain",
+          "videoFilename": "just_in_time_jit_inventor.mp4",
+          "pdfPage": 56,
+          "importance": "HIGH",
+          "difficulty": "MEDIUM",
+          "formulae": "Pull System: Produce only what is needed, when needed, in exact quantity",
+          "description": "Pull-based zero-waste inventory philosophy minimizing holding, obsolescence, and setup times.",
+          "keyPoints": [
+            "Pull signal via Kanban instead of Push forecasting.",
+            "Requires reliable suppliers, zero-defect quality, short setup times.",
+            "Reduces working capital tied in warehousing."
+          ],
+          "romanUrduSummary": "JIT ka matlab godown bharne ke bajaye jab order aaye usi waqt exact quantity banana aur mangwana. Is mein supplier bharosemand hona aur quality 100% hona zaroori hai.",
+          "pakistaniExample": "KFC / McDonald's Pakistan buns aur fresh chicken daily JIT deliveries par mangwate hain taa ke wastage na ho."
+        },
+        {
+          "id": "om_u05_scm",
+          "unit": 5,
+          "name": "Supply Chain Management (SCM) & Bullwhip Effect",
+          "videoFilename": "supply_chain_management_b.mp4",
+          "pdfPage": 59,
+          "importance": "MEDIUM",
+          "difficulty": "MEDIUM",
+          "formulae": "Upstream Suppliers -> Manufacturer -> Distributors -> End Customer",
+          "description": "Coordinating material, cash, and information flows end-to-end across partner networks.",
+          "keyPoints": [
+            "Upstream vs downstream coordination.",
+            "Bullwhip effect: Small retail demand swings amplify into huge factory order swings.",
+            "Mitigated via shared POS data and Vendor-Managed Inventory (VMI)."
+          ],
+          "romanUrduSummary": "SCM mein supplier se le kar customer tak saman, paisa aur data ki flow ko tez aur sasta banana shamil hai. Agar retailer aur factory data share na karein to Bullwhip Effect (faltu zyada order) aata hai.",
+          "pakistaniExample": "Daraz aur TCS E-Com real-time tracking se seller warehouse aur buyer doorstep ke darmiyan supply chain gaps khatam karte hain."
+        },
+        {
+          "id": "om_u06_capacity",
+          "unit": 6,
+          "name": "Capacity Planning, FMS, Forecasting & Queuing",
+          "videoFilename": "u06_01_capacity_planning.mp4",
+          "pdfPage": 64,
+          "importance": "HIGH",
+          "difficulty": "MEDIUM",
+          "formulae": "Utilization = Actual Output ÷ Design Capacity | Efficiency = Actual Output ÷ Effective Capacity",
+          "description": "Managing Design vs Effective capacity, Flexible Manufacturing Systems (FMS), demand forecasting, and queuing theory.",
+          "keyPoints": [
+            "Design Capacity: Theoretical maximum output.",
+            "Effective Capacity: Design minus planned maintenance & setups.",
+            "Chase Demand vs Level Capacity vs Demand Management strategies.",
+            "Queuing Theory balances server cost vs customer waiting dissatisfaction."
+          ],
+          "romanUrduSummary": "Design capacity 100% theoretical limit hai, Effective capacity holidays aur maintenance nikaal kar banti hai. Queuing theory check karti hai ke bank mein kitne cashiers rakhein taa ke customer lambi line se tang na ho.",
+          "pakistaniExample": "HBL Ramadan ya salary days par extra temporary counters aur digital ATM queueing deploy karta hai."
+        },
+        {
+          "id": "om_u06_fms",
+          "unit": 6,
+          "name": "Flexible Manufacturing Systems (FMS) & Forecasting",
+          "videoFilename": "u06_02_fms_manufacturing.mp4",
+          "pdfPage": 66,
+          "importance": "MEDIUM",
+          "difficulty": "MEDIUM",
+          "formulae": "CNC Workstations + Automated Material Handling + Central Computer Control",
+          "description": "Automated computer-controlled cells switching between product variants with near-zero setup downtime.",
+          "keyPoints": [
+            "Combines mid-volume efficiency with high product variety.",
+            "Time-series forecasting: Trend, Seasonal, Cyclical, Random variation."
+          ],
+          "romanUrduSummary": "FMS mein computer-controlled machines khud tool change kar ke mukhtalif products jaldi bana leti hain bina factory band kiye.",
+          "pakistaniExample": "Pak Elektron (PEL) automated PCB/sheet-metal lines par jaldi refrigerator models switch kar leta hai."
+        },
+        {
+          "id": "om_u06_forecast",
+          "unit": 6,
+          "name": "Demand Forecasting & Queuing Models",
+          "videoFilename": "u06_03_demand_forecasting.mp4",
+          "pdfPage": 67,
+          "importance": "MEDIUM",
+          "difficulty": "MEDIUM",
+          "formulae": "Exponential Smoothing & Moving Averages; Little's Law L = λ × W",
+          "description": "Quantitative and qualitative forecasting techniques plus single/multi-channel queue performance.",
+          "keyPoints": [
+            "Delphi technique & Executive opinion (qualitative).",
+            "Moving average & Regression (quantitative).",
+            "Single-line multi-server queues reduce perceived unfairness."
+          ],
+          "romanUrduSummary": "Demand forecasting se pata chalta hai aglay mahine kitna stock chahiye. Quantitative mein Moving Average aur Qualitative mein Delphi expert survey aata hai.",
+          "pakistaniExample": "Jazz aur K-Electric summer peak load ki demand pehle se weather trend ke mutabiq forecast karte hain."
+        },
+        {
+          "id": "om_u06_queuing",
+          "unit": 6,
+          "name": "Queuing Theory Operations",
+          "videoFilename": "u06_04_queuing_theory.mp4",
+          "pdfPage": 67,
+          "importance": "MEDIUM",
+          "difficulty": "MEDIUM",
+          "formulae": "Total Cost = Cost of Waiting Customers + Cost of Service Capacity",
+          "description": "Analyzing arrival rate (λ), service rate (μ), and waiting psychology.",
+          "keyPoints": [
+            "Minimize sum of idle-staff cost and lost-customer wait cost.",
+            "Occupied time feels shorter than unoccupied wait time."
+          ],
+          "romanUrduSummary": "Queuing theory batati hai ke counter cost aur customer ke intizaar ke nuqsan ke darmiyan best balance kahan hai.",
+          "pakistaniExample": "Meezan Bank single token system aur digital wait screens se customer anxiety kam karta hai."
+        },
+        {
+          "id": "om_u07_coq",
+          "unit": 7,
+          "name": "Cost of Quality (COQ), Six Sigma & TQM",
+          "videoFilename": "u07_01_cost_of_quality.mp4",
+          "pdfPage": 68,
+          "importance": "CRITICAL",
+          "difficulty": "MEDIUM",
+          "formulae": "COQ = Conformance (Prevention + Appraisal) + Non-Conformance (Internal + External Failure)",
+          "description": "Juran's 4 COQ categories, Six Sigma 3.4 DPMO (DMAIC), SERVQUAL, ISO 9000/14000/27000/45000/42001/56005.",
+          "keyPoints": [
+            "Prevention (training, design) cuts failure costs sharply.",
+            "Appraisal: inspection, lab testing, quality audits.",
+            "Internal failure: scrap/rework before dispatch; External failure: recalls/warranty.",
+            "Six Sigma: 3.4 defects per million opportunities (DMAIC: Define, Measure, Analyze, Improve, Control)."
+          ],
+          "romanUrduSummary": "Juran Cost of Quality ke 4 hissay: Prevention (galti hone se rokna), Appraisal (check/test karna), Internal Failure (factory mein scrap), External Failure (customer ke paas complaint/recall). Six Sigma = 3.4 defects per million via DMAIC.",
+          "pakistaniExample": "Getz Pharma testing labs Appraisal Cost karti hain taa ke External Failure (medicine recall) kabhi na ho."
+        },
+        {
+          "id": "om_u07_kaizen_qc",
+          "unit": 7,
+          "name": "Kaizen, Kanban, Lean & Quality Circles (Past Paper Q.9)",
+          "videoFilename": "u07_03_kaizen_kanban_jit.mp4",
+          "pdfPage": 74,
+          "importance": "CRITICAL",
+          "difficulty": "EASY",
+          "formulae": "Kaizen = Continuous Small Steps | TQMEX = 5S -> BPR -> QCC -> ISO 9000 -> TPM -> TQM",
+          "description": "Continuous incremental improvement, Kanban pull cards, TQMEX, and employee Quality Circles (Q.9).",
+          "keyPoints": [
+            "Quality Circle (Q.9): Small voluntary mixed-level group solving shop-floor quality problems.",
+            "Advantages: Higher quality/productivity, continuous improvement culture, frontline insight, organizational unity.",
+            "Kanban cards authorize upstream production/movement only on demand."
+          ],
+          "romanUrduSummary": "Past Paper Q.9! Quality Circle chhota sa voluntary group hota hai jahan workers mil kar factory ke maslay khud hal karte hain. Kaizen matlab roz thodi thodi continuous behtari.",
+          "pakistaniExample": "Millat Tractors aur Descon Engineering mein workers Quality Circles ke zariye waste kam karne ke ideas dete hain."
+        }
+      ]
+    },
+    {
+      "code": "PART_B",
+      "title": "Human Resource Management",
+      "weightPercent": 20,
+      "units": "Units 8–9",
+      "topics": [
+        {
+          "id": "om_u08_hrm_taylor",
+          "unit": 8,
+          "name": "HRM Strategic Importance & Scientific Mgmt (Q.2, Q.3)",
+          "videoFilename": "u08_01_taylor_scientific_mgmt.mp4",
+          "pdfPage": 87,
+          "importance": "CRITICAL",
+          "difficulty": "EASY",
+          "formulae": "3 HRM Reasons + 4 External Factors + Recruitment Outsourcing (Q.3)",
+          "description": "Strategic value of HRM (Past Paper Q.2), recruitment agency outsourcing (Q.3), and Taylor's Scientific Management.",
+          "keyPoints": [
+            "Q.2: Competitive advantage, vital strategy pillar, shapes performance via how staff are treated.",
+            "Q.2 External factors: Economy, Labor Unions, Legal environment, Demographics.",
+            "Q.3 Agency outsourcing: Confidentiality, saves HR time screening mass CVs, hides expansion/turnover from rivals.",
+            "Taylor: Time-motion studies, specialization, piece-rate pay."
+          ],
+          "romanUrduSummary": "Past Paper Q.2 & Q.3! HRM company ka competitive advantage hai; bahar se Economy, Unions, Laws aur Demographics asar dalte hain. Agencies ko hiring is liye dete hain taa ke confidentiality rahe aur HR ka waqt bache.",
+          "pakistaniExample": "PTCL aur HBL senior executive positions ke liye headhunting agencies use karte hain taa ke competitors ko expansion plans pata na chalein."
+        },
+        {
+          "id": "om_u08_herzberg",
+          "unit": 8,
+          "name": "Herzberg Two-Factor, Maslow & Vroom Expectancy",
+          "videoFilename": "u08_03_herzberg_two_factor.mp4",
+          "pdfPage": 92,
+          "importance": "CRITICAL",
+          "difficulty": "MEDIUM",
+          "formulae": "Motivation (Vroom Force) = Valence × Expectancy × Instrumentality",
+          "description": "Content and process motivation theories distinguishing dissatisfaction prevention from true inner drive.",
+          "keyPoints": [
+            "Herzberg Hygiene Factors: Salary, policy, working conditions (prevent dissatisfaction, don't motivate long-term).",
+            "Herzberg Motivators: Achievement, recognition, meaningful work, advancement.",
+            "Maslow: Physiological -> Safety -> Social -> Esteem -> Self-Actualization."
+          ],
+          "romanUrduSummary": "Herzberg ke mutabiq Salary aur AC room Hygiene Factors hain — yeh na hon to banda bura maanta hai, lekin achi job design, izzat (recognition) aur promotion asal Motivators hain!",
+          "pakistaniExample": "Pakistani IT firms sirf salary ke ilawa autonomy, certificates aur growth path de kar top developers retain karti hain."
+        },
+        {
+          "id": "om_u08_mcgregor",
+          "unit": 8,
+          "name": "McGregor Theory X & Theory Y + 70-20-10 Learning",
+          "videoFilename": "u08_05_mcgregor_theory_xy.mp4",
+          "pdfPage": 96,
+          "importance": "HIGH",
+          "difficulty": "EASY",
+          "formulae": "70% On-the-Job Experience | 20% Coaching/Mentoring | 10% Formal Courses",
+          "description": "Managerial assumptions about employee attitude (X = control/punish vs Y = trust/empower) plus workplace development.",
+          "keyPoints": [
+            "Theory X manager assumes workers dislike work and need strict supervision.",
+            "Theory Y manager believes workers seek responsibility when trusted.",
+            "Handy's Shamrock: Professional Core, Contractual Fringe, Flexible Labor."
+          ],
+          "romanUrduSummary": "Theory X kehta hai log kaam se bhaagte hain (danda zaroori hai). Theory Y kehta hai log zimmedari chahte hain agar unhein trust aur freedom mile. 70-20-10 model mein 70% seekhna kaam karte waqt hota hai.",
+          "pakistaniExample": "Factory shift supervisors aksar Theory X apnate hain jabke FinTech product teams (SadaPay/NayaPay) Theory Y par chalti hain."
+        },
+        {
+          "id": "om_u08_psych_contract",
+          "unit": 8,
+          "name": "Handy's Shamrock & Psychological Contract",
+          "videoFilename": "u08_07_psychological_contract.mp4",
+          "pdfPage": 99,
+          "importance": "HIGH",
+          "difficulty": "MEDIUM",
+          "formulae": "Shamrock = 1. Core Professionals + 2. Contractual Fringe + 3. Flexible Labor",
+          "description": "Unwritten mutual expectations between employer and worker plus flexible workforce architecture.",
+          "keyPoints": [
+            "Psychological Contract: Implicit loyalty, fairness, growth vs effort/commitment.",
+            "Breaking psychological trust causes quiet quitting & high turnover.",
+            "Remote/hybrid work reshapes employee experience (EX) & trust."
+          ],
+          "romanUrduSummary": "Psychological Contract woh unsaid bharosa hai jo employee aur company ke darmiyan hota hai (imandari ke badlay career security/fairness). Shamrock ke 3 pattay: Core, Outsourced aur Part-time staff.",
+          "pakistaniExample": "Companies jab security guard ya IT support ko vendor ko outsource karti hain to woh Contractual Fringe (2nd leaf) ban jaati hai."
+        },
+        {
+          "id": "om_u08_interview_bias",
+          "unit": 8,
+          "name": "Selection Interview Biases & Algorithmic Bias (Q.8)",
+          "videoFilename": "u08_09_interview_bias_halo.mp4",
+          "pdfPage": 105,
+          "importance": "CRITICAL",
+          "difficulty": "MEDIUM",
+          "formulae": "Halo Effect | Contagious Bias | Stereotyping | Logical Error | Algorithmic Bias",
+          "description": "Reliability/validity limits of unstructured selection interviews (Past Paper Q.8) and 2025 AI hiring ethics.",
+          "keyPoints": [
+            "Low reliability (panelists disagree) and weak predictive validity.",
+            "Halo Effect: One good/bad trait distorts full evaluation.",
+            "Contagious Bias: Interviewer signals leading questions.",
+            "2025 Update: AI screening tools can inherit historical hiring bias if unchecked."
+          ],
+          "romanUrduSummary": "Past Paper Q.8 ka guaranteed topic! Interview mein 5 ghaltiyan: Halo Effect (aik baat dekh kar sab acha/bura samajhna), Contagious Bias (khud ishara dena), Stereotyping (kapde/lahjay se judge karna), Logical Error, aur ab 2025 mein AI Algorithmic Bias.",
+          "pakistaniExample": "Structured panel interviews aur blind technical tests ke zariye Karachi/Lahore ke banks Halo Effect kam karte hain."
+        },
+        {
+          "id": "om_u09_kolb_pfeffer",
+          "unit": 9,
+          "name": "Pfeffer's 7 HR Practices & Kolb Learning Cycle",
+          "videoFilename": "u09_02_kolb_learning_cycle.mp4",
+          "pdfPage": 112,
+          "importance": "HIGH",
+          "difficulty": "MEDIUM",
+          "formulae": "Kolb: Concrete Experience -> Reflective Observation -> Abstract Conceptualization -> Active Experimentation",
+          "description": "High-performance people practices and experiential learning loops turning job action into lasting skill.",
+          "keyPoints": [
+            "Pfeffer 7: Job security, Selective hiring, Self-managed teams, High contingent pay, Extensive training, Reduced status gaps, Financial info sharing.",
+            "Kolb cycle repeats continuously to convert work into conceptual mastery."
+          ],
+          "romanUrduSummary": "Kolb Cycle ke 4 steps yaad rakhein: Doing (Concrete Experience) -> Reviewing (Reflective Observation) -> Concluding (Abstract Conceptualization) -> Testing (Active Experimentation). Pfeffer kehta hai info chhupane ke bajaye staff se financials share karo!",
+          "pakistaniExample": "Management trainees pehle rotation par kaam karte hain (Concrete), phir mentor review karte hain (Reflective), model seekhte hain (Abstract) aur naye project par apply karte hain."
+        }
+      ]
+    },
+    {
+      "code": "PART_C",
+      "title": "Marketing Management",
+      "weightPercent": 25,
+      "units": "Units 10–12",
+      "topics": [
+        {
+          "id": "om_u10_orientations",
+          "unit": 10,
+          "name": "Marketing Concept vs Sales Orientation (Q.1, Q.5)",
+          "videoFilename": "u10_01_marketing_orientations.mp4",
+          "pdfPage": 120,
+          "importance": "CRITICAL",
+          "difficulty": "EASY",
+          "formulae": "Production -> Product -> Sales (Push) -> Marketing Concept (Customer Satisfaction)",
+          "description": "Core business orientations and exact ICMA definitions for Marketing Concept (Q.1) and Sales Orientation drawbacks (Q.5).",
+          "keyPoints": [
+            "Q.1 Marketing Concept: Determine target market needs/wants/values and deliver superior satisfaction.",
+            "Q.5 Sales Orientation firms: FMCG retailers, Direct/MLM sales, Call centers, Real estate agencies.",
+            "Q.5 Drawbacks: Customer dissatisfaction, short-term focus, weak innovation, limited insight, high staff turnover."
+          ],
+          "romanUrduSummary": "Past Paper Q.1 aur Q.5 dono isi topic se hain! Sales Orientation mein sirf zabardasti maal bechne par zor hota hai (drawbacks: naraz customer, short-term soch). Marketing Concept pehle customer ki zaroorat samajh kar behtar solution deta hai.",
+          "pakistaniExample": "Real estate telemarketing Sales Orientation dikhati hai, jabke JazzCash customer friction study kar ke Marketing Concept apply karta hai."
+        },
+        {
+          "id": "om_u10_stp",
+          "unit": 10,
+          "name": "STP Framework (Segmentation, Targeting, Positioning)",
+          "videoFilename": "u10_02_stp_marketing.mp4",
+          "pdfPage": 125,
+          "importance": "HIGH",
+          "difficulty": "EASY",
+          "formulae": "Segmentation -> Targeting -> Positioning + Micro-Influencers",
+          "description": "Dividing heterogeneous markets, choosing viable segments, and claiming a clear place in buyer minds.",
+          "keyPoints": [
+            "Segmentation bases: Geographic, Demographic, Psychographic, Behavioral.",
+            "Targeting options: Undifferentiated, Differentiated, Concentrated (Niche).",
+            "Positioning maps plot price vs quality perceptions."
+          ],
+          "romanUrduSummary": "STP = Market ko hisson mein baantna (Segmentation), best hissa chunn'na (Targeting), aur customer ke dimagh mein apni khaas jagah banana (Positioning).",
+          "pakistaniExample": "Careem ne Economy, Go Mini aur Business rides bana kar alag income segments ko target kiya."
+        },
+        {
+          "id": "om_u10_metaverse",
+          "unit": 10,
+          "name": "Metaverse, Virtual Branding & 2025 Web3/CSR Marketing",
+          "videoFilename": "u10_03_metaverse_branding.mp4",
+          "pdfPage": 129,
+          "importance": "HIGH",
+          "difficulty": "MEDIUM",
+          "formulae": "7Ps Services Mix + Web3/DAO + CSR + Micro-Influencers",
+          "description": "2025 ICMA syllabus additions covering immersive virtual branding, decentralized Web3 communities, and ethical CSR.",
+          "keyPoints": [
+            "Virtual showrooms, AR try-ons, and gamified brand engagement.",
+            "Micro-influencers yield higher trust/engagement than mega-celebrities.",
+            "Web3/DAO marketing rewards loyal community governance & transparency."
+          ],
+          "romanUrduSummary": "2025 ke naye syllabus mein Metaverse/AR branding, micro-influencers, CSR aur Web3 community campaigns shamil kiye gaye hain — MCQs mein lazmi check karein!",
+          "pakistaniExample": "Pakistani fashion aur e-commerce brands Instagram micro-influencers aur AR virtual glasses/makeup try-on use kar rahe hain."
+        },
+        {
+          "id": "om_u11_bcg",
+          "unit": 11,
+          "name": "BCG Growth-Share Matrix & 7Ps Services Mix",
+          "videoFilename": "u11_02_bcg_matrix.mp4",
+          "pdfPage": 152,
+          "importance": "CRITICAL",
+          "difficulty": "MEDIUM",
+          "formulae": "7Ps = Product, Price, Place, Promotion + People, Process, Physical Evidence",
+          "description": "Portfolio management classifying SBUs into Stars, Cash Cows, Question Marks, and Dogs plus service mix.",
+          "keyPoints": [
+            "Star: High share + High market growth (invest to defend).",
+            "Cash Cow: High share + Low growth (harvest surplus cash).",
+            "Question Mark: Low share + High growth (build selectively or divest).",
+            "Dog: Low share + Low growth (harvest or liquidate)."
+          ],
+          "romanUrduSummary": "BCG Matrix mein 4 boxes: Star (tez market + leader), Cash Cow (slow market + leader -> note chhapne ki machine), Question Mark (tez market + kamzor), Dog (slow + kamzor). Services 7Ps mein People, Process aur Physical Evidence add hote hain.",
+          "pakistaniExample": "Unilever Pakistan ka Surf Excel / Lifebuoy Cash Cow hai jo naye e-commerce products ko fund karta hai."
+        },
+        {
+          "id": "om_u11_ansoff",
+          "unit": 11,
+          "name": "Ansoff Growth Matrix & Buyer Decision Process",
+          "videoFilename": "u11_03_ansoff_matrix.mp4",
+          "pdfPage": 168,
+          "importance": "CRITICAL",
+          "difficulty": "MEDIUM",
+          "formulae": "Existing/New Product × Existing/New Market (Lowest to Highest Risk)",
+          "description": "Strategic product-market expansion pathways and 5-stage consumer buying journey.",
+          "keyPoints": [
+            "Market Penetration: Existing Product + Existing Market (safest).",
+            "Product Development: New Product + Existing Market.",
+            "Market Development: Existing Product + New Market.",
+            "Diversification: New Product + New Market (highest risk)."
+          ],
+          "romanUrduSummary": "Ansoff ke 4 growth raaste: Market Penetration (purani cheez purane bazaar mein), Product Development (nayi cheez purane customer ko), Market Development (purani cheez naye shehar/mulk mein), Diversification (bilkul nayi cheez naya market — sab se zyada risk!).",
+          "pakistaniExample": "Tapal Tea jab green tea pouches purane buyers ko beche to Product Development hai; agar Tapal clothing brand khole to Diversification hoga."
+        }
+      ]
+    },
+    {
+      "code": "PART_D",
+      "title": "Performance Management",
+      "weightPercent": 20,
+      "units": "Units 13–14",
+      "topics": [
+        {
+          "id": "om_u13_epm_budget",
+          "unit": 13,
+          "name": "EPM Control Loop, CSFs vs KPIs & Budgetary Control (Q.7)",
+          "videoFilename": "",
+          "pdfPage": 215,
+          "importance": "CRITICAL",
+          "difficulty": "MEDIUM",
+          "formulae": "CSF = Critical Qualitative Success Area | KPI = Quantified Measurement Target",
+          "description": "Enterprise control feedback loops, distinguishing CSFs from KPIs, and profit maximization via budgetary control (Q.7).",
+          "keyPoints": [
+            "Q.7 Budgetary Control: Controls costs, measures departmental/cost-center performance, finds cost-cuts, enables variance action, coordinates divisions.",
+            "CSFs come first (what must go right); KPIs measure them quantitatively.",
+            "Feedback vs Feedforward control."
+          ],
+          "romanUrduSummary": "Past Paper Q.7! Budgetary control wastage rokta hai, har department ka hisab rakhta hai, variance pakad kar foran corrective action dilata hai aur profit barhata hai. Yaad rakhein: CSF 'kya zaroori hai' batata hai aur KPI usko 'numbers mein napta hai'.",
+          "pakistaniExample": "Fauji Fertilizer monthly variance report dekhta hai taa ke gas aur packaging costs budgeted limit ke andar rahein."
+        },
+        {
+          "id": "om_u14_bsc",
+          "unit": 14,
+          "name": "Balanced Scorecard (Q.4), Building Block & Pyramid",
+          "videoFilename": "u14_01_balanced_scorecard.mp4",
+          "pdfPage": 230,
+          "importance": "CRITICAL",
+          "difficulty": "MEDIUM",
+          "formulae": "4 BSC Perspectives | 3 Building Block Pillars (Fitzgerald & Moon) | Lynch & Cross Pyramid",
+          "description": "Kaplan & Norton's Balanced Scorecard and exact Q.4 disadvantages alongside service & pyramid performance frameworks.",
+          "keyPoints": [
+            "BSC 4 Perspectives: Financial, Customer, Internal Business Processes, Learning & Growth.",
+            "Q.4 Disadvantages: Qualitative data difficulty, information overload, metric conflicts (cutting R&D), strategy misalignment, poor management commitment, high setup cost.",
+            "Building Block: Dimensions (2 Results + 4 Determinants), Standards (Ownership, Achievability, Equity), Rewards (Clarity, Motivation, Controllability)."
+          ],
+          "romanUrduSummary": "Exam ka No.1 high-yield topic (Unit 14 + Q.4)! Balanced Scorecard ke 4 hissay: Financial, Customer, Internal Process, Learning & Growth. Q.4 ke drawbacks lazmi yaad karein: qualitative data mushkil, overload, R&D cut conflict aur senior support ki kami.",
+          "pakistaniExample": "HBL branch performance sirf deposit profit (Financial) se nahi balke app rating (Customer), turnaround time (Internal) aur staff training (Learning) se dekhi jaati hai."
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 {
-  "name": "OM Merit Portal",
-  "description": "ICMAP M3 Organizational Management (5 Dec 2026) Merit Strategist Portal & PWA with offline OM book, past papers, Urdu voice coach, 5 daily flashcards, and 60/40 tests.",
+  "name": "OM Jarvis",
+  "description": "OM Jarvis — ICMA M3 Organizational Management Smart Portal for Saifullah Qureshi (7 Dec 2026 Certificate of Merit): Room + DataStore offline-first study system, Media3 ExoPlayer offline videos, SM-2 flashcards, adaptive MCQs, 3-hour mock simulator, WorkManager reminders, and Call Jarvis mentor.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

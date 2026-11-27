@@ -1,53 +1,52 @@
 package com.example.ui.theme
 
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
+import androidx.core.view.WindowCompat
 
-private val DarkColorScheme = darkColorScheme(
-    primary = ElectricTealBright,
-    onPrimary = ScholarNavySurface,
-    primaryContainer = ElectricTealDarkContainer,
-    onPrimaryContainer = ElectricTealContainer,
-    secondary = WarmAmberBright,
-    onSecondary = ScholarNavySurface,
-    secondaryContainer = WarmAmberDarkContainer,
-    onSecondaryContainer = WarmAmberContainer,
-    tertiary = Color(0xFF60A5FA),
-    onTertiary = ScholarNavySurface,
-    background = ScholarNavySurface,
-    onBackground = LightInk,
-    surface = ScholarDarkCard,
-    onSurface = LightInk,
-    surfaceVariant = ScholarDarkCardElevated,
-    onSurfaceVariant = LightInkMuted,
-    error = CoralErrorBright,
-    onError = ScholarNavySurface,
-    outline = Color(0xFF334155)
+private val JarvisDarkColorScheme = darkColorScheme(
+    primary = JarvisElectricBlue,
+    onPrimary = Color.White,
+    primaryContainer = Color(0xFF132D63),
+    onPrimaryContainer = JarvisCyanGlow,
+    secondary = JarvisPurpleEnd,
+    onSecondary = Color.White,
+    secondaryContainer = Color(0xFF2E1B5E),
+    onSecondaryContainer = Color(0xFFE9D5FF),
+    tertiary = JarvisGold,
+    onTertiary = JarvisBgDeep,
+    tertiaryContainer = JarvisGoldContainer,
+    onTertiaryContainer = JarvisGold,
+    background = JarvisBgDeep,
+    onBackground = JarvisTextPrimary,
+    surface = JarvisCardNavy,
+    onSurface = JarvisTextPrimary,
+    surfaceVariant = JarvisCardNavyElevated,
+    onSurfaceVariant = JarvisTextSecondary,
+    error = JarvisCoralRed,
+    onError = Color.White,
+    outline = JarvisBlueBorder
 )
 
-private val LightColorScheme = lightColorScheme(
+private val JarvisLightColorScheme = lightColorScheme(
     primary = ScholarIndigo,
     onPrimary = Color.White,
     primaryContainer = Color(0xFFD6E3F8),
     onPrimaryContainer = ScholarIndigo,
-    secondary = Color(0xFF0F766E),
+    secondary = Color(0xFF6D28D9),
     onSecondary = Color.White,
-    secondaryContainer = ElectricTealContainer,
-    onSecondaryContainer = Color(0xFF043D38),
+    secondaryContainer = Color(0xFFEDE9FE),
+    onSecondaryContainer = Color(0xFF4C1D95),
     tertiary = Color(0xFFB45309),
     onTertiary = Color.White,
-    tertiaryContainer = WarmAmberContainer,
+    tertiaryContainer = Color(0xFFFEF3C7),
     onTertiaryContainer = Color(0xFF78350F),
     background = IvoryBackground,
     onBackground = InkPrimary,
@@ -63,31 +62,23 @@ private val LightColorScheme = lightColorScheme(
 val StudyPortalShapes = Shapes(
     small = RoundedCornerShape(10.dp),
     medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(22.dp),
-    extraLarge = RoundedCornerShape(28.dp)
+    large = RoundedCornerShape(20.dp),
+    extraLarge = RoundedCornerShape(24.dp)
 )
 
 @Composable
 fun StudyPortalTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    dynamicColor: Boolean = false,
+    darkTheme: Boolean = true,
     content: @Composable () -> Unit,
 ) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
+    val colorScheme = if (darkTheme) JarvisDarkColorScheme else JarvisLightColorScheme
 
-    val view = androidx.compose.ui.platform.LocalView.current
+    val view = LocalView.current
     if (!view.isInEditMode) {
         androidx.compose.runtime.SideEffect {
             val window = (view.context as? android.app.Activity)?.window
             if (window != null) {
-                val controller = androidx.core.view.WindowCompat.getInsetsController(window, view)
+                val controller = WindowCompat.getInsetsController(window, view)
                 controller.isAppearanceLightStatusBars = !darkTheme
                 controller.isAppearanceLightNavigationBars = !darkTheme
             }
